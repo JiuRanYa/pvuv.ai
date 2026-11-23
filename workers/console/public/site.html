@@ -11,7 +11,6 @@
   #cards .card { font: inherit; color: inherit; text-align: start; cursor: pointer; }
   #cards .card span { display: block; }
   #cards .card:hover { border-color: var(--border-3); }
-  #cards .card[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 2px var(--accent); }
   .rt { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--text-3); font-size: 13px; flex-wrap: wrap; }
   .rt .rt-site { font-weight: 600; color: var(--text); padding-right: 10px; margin-right: 4px; border-right: 1px solid var(--border-2); }
   .rt .live { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--text); }
@@ -126,21 +125,27 @@
   .site-tools summary::after { content: '▾'; color: var(--muted); }
   .site-actions { position: absolute; z-index: 4; right: 0; top: calc(100% + 6px); display: grid; gap: 4px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 24px #2434511a; }
   .site-actions .btn { justify-content: flex-start; border-color: transparent; }
-  #cards { gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-  #cards .card { border: 0; border-radius: 0; padding: 15px 18px; display: flex; flex-direction: column; }
-  #cards .card .k { order: -1; font-size: 13px; font-weight: 550; max-width: 100%; }
-  #cards .card .v { font-size: clamp(22px, 2.4vw, 30px); max-width: 100%; }
-  #cards .card[aria-pressed="true"] { background: #f0f3ff; box-shadow: inset 0 3px var(--accent); }
+  #cards { gap: 4px; padding: 7px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  #cards .card { border: 0; border-inline-end: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; }
+  #cards .card .k { order: -1; font-size: 12px; font-weight: 650; letter-spacing: .015em; max-width: 100%; }
+  #cards .card .v { font-size: 24px; font-weight: 650; max-width: 100%; }
+  #cards .card[aria-pressed="true"] { background: #f2f1fa; box-shadow: inset 0 -2px var(--accent); }
   #cards .card[aria-pressed="true"] .k { color: var(--link); }
   #cards .card:hover { background: var(--surface-2); }
   #cards .card:focus-visible { outline-offset: -3px; }
-  .sec[data-sec="overview"] { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-top: 14px; padding: 16px; }
+  #cards:has(+ .sec:not([hidden])) { border-bottom: 0; border-radius: 10px 10px 0 0; }
+  .sec[data-sec="overview"] { background: var(--surface); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 10px 10px; padding: 16px; box-shadow: 0 2px 4px #29243e09; }
   .sec[data-sec="overview"] .chart-head { margin: 0 0 14px; }
   #chart { border: 0; padding: 0; }
   .rt-site { font-size: 19px; }
-  @media (max-width: 900px) { #cards { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+  .grid2 > div:has(> .sec-head + .panel) { margin-top: 18px; min-width: 0; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .grid2 > div > .sec-head:has(+ .panel) { align-items: center; margin: 0; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .grid2 .sec-head + .panel { border: 0; padding: 8px 0 0; }
+  @media (min-width: 1080px) { #cards { grid-template-columns: repeat(8, minmax(0,1fr)); } }
+  @media (min-width: 721px) and (max-width: 1079px) { #cards { grid-template-columns: repeat(4, minmax(0,1fr)); } }
   @media (max-width: 720px) {
-    #cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    #cards { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1px; padding: 4px; }
+    #cards:has(+ .sec:not([hidden])) { margin-inline: -12px; border-inline: 0; border-radius: 0; }
     #cards .card { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; min-height: 46px; padding: 6px 10px; }
     #cards .card .k { white-space: normal; line-height: 1.2; }
     #cards .card .v { flex-shrink: 0; font-size: 18px; }
@@ -762,7 +767,7 @@ function lineChart(points, metric) {
   const hasData = drawn.some((p) => p.value != null && (p.value !== 0 || p.pv > 0));
   if (!drawn.length || !hasData) { el.innerHTML = `<p class="muted">${te('no data yet')}</p>`; return; }
   const W = Math.max(240, el.clientWidth || document.documentElement.clientWidth - 12);
-  const H = matchMedia('(max-width: 720px)').matches ? Math.round(Math.max(300, Math.min(360, W * .9))) : W < 600 ? 205 : 240;
+  const H = matchMedia('(max-width: 720px)').matches ? Math.round(Math.max(300, Math.min(360, W * .9))) : W < 600 ? 205 : 300;
   const P = 46, PT = 12;
   const max = Math.max(...drawn.map((p) => p.value ?? 0), 1);
   const { top, step } = niceScale(max);
@@ -826,7 +831,7 @@ function lineChart(points, metric) {
     ${solid ? `<polygon points="${xs(complete[0].i)},${ys(0)} ${solid} ${xs(complete[complete.length - 1].i)},${ys(0)}" fill="url(#trend-fill)"/>` : ''}
     ${solid ? `<polyline points="${solid}" fill="none" stroke="var(--accent)" stroke-width="2"/>` : ''}
     ${dashed ? `<polyline points="${dashed}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-dasharray="4 3" opacity="0.75"/>` : ''}
-    ${points.map(dot).join('')}
+    ${drawn.length === 1 ? points.map(dot).join('') : ''}
     ${strip}
     ${hasInvalid ? `<text x="${P - 8}" y="${SY + SH - 1}" text-anchor="end" opacity="0.75">${esc(t('invalid'))}</text>` : ''}
     ${labels.map((p) => `<text x="${xs(points.indexOf(p))}" y="${VH - 6}" text-anchor="middle" ${p.status === 'future' ? 'opacity="0.4"' : ''}>${esc(p.label)}</text>`).join('')}
