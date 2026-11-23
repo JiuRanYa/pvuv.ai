@@ -759,7 +759,7 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
     const period = parsePeriod(url.searchParams.get('period'), site.timezone || 'UTC');
     const q = url.searchParams;
     const filters = parseFilters(q.get('filters'));
-    if (resource === 'realtime') return json(await realtime(env.DB, siteId, Date.now()));
+    if (resource === 'realtime') return json(await realtime(env.DB, siteId, Date.now(), 30, url.searchParams.get('summary') !== '1'));
     if (resource === 'overview') return json(await overview(env.DB, siteId, period, filters));
     if (resource === 'timeseries') return json(await timeseries(env.DB, siteId, q.get('metric') ?? 'pv', period, q.get('interval') ?? 'day', filters));
     if (resource === 'breakdown') {

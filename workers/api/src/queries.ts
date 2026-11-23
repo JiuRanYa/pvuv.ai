@@ -491,15 +491,23 @@ export async function overview(db: D1Database, siteId: string, period: Period, f
 
 /** Distinct human visitors + pageviews in the last `windowMin` minutes, with a
  *  per-minute pageview sparkline. Always live (independent of the period). */
-export async function realtime(db: D1Database, siteId: string, now: number, windowMin = 30) {
+export async function realtime(db: D1Database, siteId: string, now: number, windowMin = 30, includeMinutes = true) {
   const startTs = now - windowMin * 60_000;
-  const empty = { window_minutes: windowMin, online: 0, pageviews: 0, minutes: new Array(windowMin).fill(0) };
+  const empty = { window_minutes: windowMin, online: 0, pageviews: 0, minutes: includeMinutes ? new Array(windowMin).fill(0) : [] };
   const tables = await eventTables(db, startTs, now + 1);
   if (tables.length === 0) return empty;
   // The clean-only predicate is pushed into the partition scan (every figure on
   // this endpoint is clean-bucket), so bot rows are dropped by the index walk
   // rather than carried into the aggregate.
   const u = unionOver(tables, 'event, visitor_id, ts', siteId, startTs, now + 1, "verdict NOT IN ('bot','crawler')");
+
+  if (!includeMinutes) {
+    const totals = await db.prepare(`
+      SELECT COUNT(DISTINCT visitor_id) AS online, COALESCE(SUM(event = 'pageview'), 0) AS pageviews
+      FROM (${u.sql})
+    `).bind(...u.binds).first<{ online: number; pageviews: number }>();
+    return { ...empty, ...totals };
+  }
 
   // ONE statement, ONE scan. The totals and the sparkline used to be two
   // queries over the same 30-minute window — the same rows read twice, two

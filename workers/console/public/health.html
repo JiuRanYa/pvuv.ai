@@ -12,10 +12,10 @@
   .step h2 { font-size: 15px; margin: 0 0 4px; color: var(--text); }
   .step .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
   #env, #ingest, #e2e, #verdict { display: flex; flex-direction: column; }
-  .row { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-top: 1px solid #1d222c; }
+  .row { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); }
   .row:first-of-type { border-top: 0; }
   .ico { flex: none; width: 20px; text-align: center; font-weight: 700; }
-  .ok { color: var(--good); } .warn { color: var(--warn); } .fail { color: var(--bad); } .pending { color: #64748b; }
+  .ok { color: var(--good); } .warn { color: var(--warn); } .fail { color: var(--bad); } .pending { color: var(--muted); }
   .row .body { flex: 1; }
   .row .label { font-weight: 600; }
   .row .detail { color: var(--muted); font-size: 13px; }
@@ -23,8 +23,8 @@
   input#ingestUrl { width: 320px; max-width: 100%; background: var(--bg); }
   label.small { display: block; color: var(--muted); font-size: 13px; margin: 4px 0; }
   .summary { border-radius: var(--radius-lg); padding: 16px 18px; margin: 14px 0; font-weight: 600; }
-  .summary.good { background: #12331f; color: var(--good-text); border: 1px solid #1f5136; }
-  .summary.bad { background: #331616; color: var(--bad-text); border: 1px solid var(--bad-border); }
+  .summary.good { background: var(--good-bg); color: var(--good-text); border: 1px solid var(--good-border); }
+  .summary.bad { background: var(--bad-bg); color: var(--bad-text); border: 1px solid var(--bad-border); }
   .kv { font-size: 13px; color: var(--muted); margin-top: 8px; }
 </style>
 </head>

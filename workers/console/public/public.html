@@ -66,7 +66,7 @@ const CHANNEL_LABEL = {
   ai: 'AI assistants', video: 'Video', referral: 'Referral', '(unknown)': '(unknown)',
 };
 const VITAL_META = { lcp_ms: 'LCP', inp_ms: 'INP*', cls: 'CLS', fcp_ms: 'FCP', ttfb_ms: 'TTFB' };
-const RATING_COLOR = { good: '#34d399', needs_improvement: '#fbbf24', poor: '#f87171' };
+const RATING_COLOR = { good: 'var(--good)', needs_improvement: 'var(--warn)', poor: 'var(--bad)' };
 const fmtVital = (k, v) => v == null ? '–' : k === 'cls' ? Number(v).toFixed(3) : v >= 1000 ? (v / 1000).toFixed(2) + 's' : Math.round(v) + 'ms';
 
 function fail() {
@@ -81,20 +81,30 @@ const get = async (p, extra = '') => {
   return r.json();
 };
 
+let redrawChart;
+let previousChartWidth = 0;
+new ResizeObserver(([entry]) => {
+  const width = Math.round(entry.contentRect.width);
+  if (width === previousChartWidth) return;
+  previousChartWidth = width;
+  if (width && entry.target.querySelector('svg')) redrawChart?.();
+}).observe(document.getElementById('chart'));
+
 function lineChart(points) {
+  redrawChart = () => lineChart(points);
   const el = document.getElementById('chart');
   const drawn = points.filter((p) => p.status !== 'future');
   if (!drawn.length || !drawn.some((p) => p.value)) { el.innerHTML = `<p class="muted">${te('no data yet')}</p>`; return; }
-  const W = 980, H = 170, P = 40;
+  const W = Math.max(240, el.clientWidth || document.documentElement.clientWidth - 50), H = 190, P = 40;
   const max = Math.max(...drawn.map((p) => p.value ?? 0), 1);
   const xs = (i) => P + (i * (W - P - 12)) / Math.max(points.length - 1, 1);
   const ys = (v) => H - 26 - ((v ?? 0) * (H - 44)) / max;
   const solid = points.map((p, i) => p.status === 'future' ? '' : `${xs(i).toFixed(1)},${ys(p.value).toFixed(1)}`).filter(Boolean).join(' ');
-  const step = Math.ceil(points.length / 8);
+  const step = Math.ceil(points.length / Math.max(2, Math.min(8, Math.floor((W - P) / 82))));
   const labels = points.filter((_, i) => i % step === 0);
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block">
-    <polyline points="${solid}" fill="none" stroke="#3b82f6" stroke-width="2"/>
-    ${points.map((p, i) => p.status === 'future' ? '' : `<circle cx="${xs(i).toFixed(1)}" cy="${ys(p.value).toFixed(1)}" r="2.4" fill="#3b82f6"><title>${esc(p.label)}: ${fmt(p.value)}</title></circle>`).join('')}
+    <polyline points="${solid}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+    ${points.map((p, i) => p.status === 'future' ? '' : `<circle cx="${xs(i).toFixed(1)}" cy="${ys(p.value).toFixed(1)}" r="2.4" fill="var(--accent)"><title>${esc(p.label)}: ${fmt(p.value)}</title></circle>`).join('')}
     ${labels.map((p) => `<text x="${xs(points.indexOf(p)).toFixed(1)}" y="${H - 8}" text-anchor="middle">${esc(p.label)}</text>`).join('')}
     <text x="${P - 6}" y="${(ys(max) + 4).toFixed(1)}" text-anchor="end">${fmt(max)}</text>
   </svg>`;
@@ -136,7 +146,7 @@ async function load() {
     sec.hidden = false;
     document.getElementById('vitals').innerHTML = `<div class="cards cards-5">` + Object.keys(VITAL_META).map((k) => {
       const m = (d.metrics || {})[k] || {};
-      const color = RATING_COLOR[m.rating] || '#8b93a1';
+      const color = RATING_COLOR[m.rating] || 'var(--muted)';
       return `<div class="card" style="border-left:3px solid ${color}"><div class="v">${fmtVital(k, m.p75)}</div><div class="k">${esc(VITAL_META[k])} <span class="muted">p75</span></div></div>`;
     }).join('') + '</div>';
   } catch { document.getElementById('vitalsSec').hidden = true; }
