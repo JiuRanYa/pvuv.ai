@@ -80,7 +80,9 @@ that is signed in to the console can call it directly for that owner's sites.
   falls back to `30d`.
 - `metric` — `pv` `uv` `sessions` `bounce_rate` `bounce_rate_single`
   `avg_duration_ms` `visit_duration_ms` `pv_per_visitor` `clean_count`
-  `suspect_count` `bot_count` `crawler_count`. Default `pv`.
+  `suspect_count` `bot_count` `crawler_count` `human_share` `forged_search`
+  `conversions` `revenue`. Default `pv`. `human_share` is a fraction of
+  pageviews, and `revenue` is in USD.
 - `interval` — `minute` `hour` `day` `week` `month`. Default `day`; with
   `period=24h` a day/week/month interval is forced to `hour`.
 - `dim` — `page` `entry_page` `exit_page` `source` `channel` `referrer`

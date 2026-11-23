@@ -242,6 +242,10 @@ const zeroAgg = (): SiteAgg => ({
   pv: 0, uv: 0, sessions: 0, clean_count: 0, suspect_count: 0, bot_count: 0, crawler_count: 0,
   conversions: 0, revenue: 0, dc: 0, zero: 0, fake: 0, search_ref: 0,
 });
+const SITE_OUTCOME_SQL = `
+      COALESCE(SUM(CASE WHEN event NOT IN (${RESERVED_EVENTS_SQL}) AND verdict NOT IN ('bot','crawler') THEN 1 ELSE 0 END), 0) AS conversions,
+      COALESCE(SUM(CASE WHEN verdict NOT IN ('bot','crawler') THEN revenue_usd ELSE 0 END), 0) AS revenue,
+      COALESCE(SUM(CASE WHEN event = 'pageview' AND (bot_flags & ${FAKE_SEARCH_MASK}) != 0 THEN 1 ELSE 0 END), 0) AS fake`;
 async function eventsSiteAgg(db: D1Database, siteId: string, startTs: number, endTs: number, filters: Filter[] = []): Promise<SiteAgg> {
   const tables = await eventTables(db, startTs, endTs);
   if (tables.length === 0) return zeroAgg();
@@ -257,11 +261,9 @@ async function eventsSiteAgg(db: D1Database, siteId: string, startTs: number, en
       COALESCE(SUM(event = 'pageview' AND verdict = 'bot'), 0) AS bot_count,
       COALESCE(SUM(event = 'pageview' AND verdict = 'crawler'), 0) AS crawler_count,
       -- conversions/revenue: custom (goal) events from non-bot/crawler traffic
-      COALESCE(SUM(CASE WHEN event NOT IN (${RESERVED_EVENTS_SQL}) AND verdict NOT IN ('bot','crawler') THEN 1 ELSE 0 END), 0) AS conversions,
-      COALESCE(SUM(CASE WHEN verdict NOT IN ('bot','crawler') THEN revenue_usd ELSE 0 END), 0) AS revenue,
+      ${SITE_OUTCOME_SQL},
       COALESCE(SUM(CASE WHEN event = 'pageview' AND (bot_flags & ${FLAG.DATACENTER_ASN}) != 0 THEN 1 ELSE 0 END), 0) AS dc,
       COALESCE(SUM(CASE WHEN event = 'pageview' AND (bot_flags & ${FLAG.ZERO_INTERACTION_NO_LEAVE}) != 0 THEN 1 ELSE 0 END), 0) AS zero,
-      COALESCE(SUM(CASE WHEN event = 'pageview' AND (bot_flags & ${FAKE_SEARCH_MASK}) != 0 THEN 1 ELSE 0 END), 0) AS fake,
       COALESCE(SUM(CASE WHEN event = 'pageview' AND ${searchRefDomainSql('ref_domain')} THEN 1 ELSE 0 END), 0) AS search_ref
     FROM (${u.sql})
   `).bind(...u.binds).first<SiteAgg>();
@@ -537,6 +539,7 @@ const TS_METRICS = new Set([
   'pv', 'uv', 'sessions', 'bounce_rate', 'bounce_rate_single',
   'avg_duration_ms', 'visit_duration_ms', 'pv_per_visitor',
   'bot_count', 'suspect_count', 'crawler_count', 'clean_count',
+  'human_share', 'forged_search', 'conversions', 'revenue',
 ]);
 const TS_INTERVALS = new Set(['minute', 'hour', 'day', 'week', 'month']);
 const RATE_METRICS = new Set(['bounce_rate', 'bounce_rate_single', 'avg_duration_ms', 'visit_duration_ms', 'pv_per_visitor']);
@@ -557,8 +560,9 @@ interface Acc {
   bounce_num: number; bounce_den: number; bs_num: number; bs_den: number;
   dur_num: number; dur_den: number; vdur_num: number; vdur_den: number;
   clean: number; suspect: number; bot: number; crawler: number;
+  conversions: number; revenue: number; fake: number;
 }
-const emptyAcc = (): Acc => ({ pv: 0, uv: 0, sessions: 0, bounce_num: 0, bounce_den: 0, bs_num: 0, bs_den: 0, dur_num: 0, dur_den: 0, vdur_num: 0, vdur_den: 0, clean: 0, suspect: 0, bot: 0, crawler: 0 });
+const emptyAcc = (): Acc => ({ pv: 0, uv: 0, sessions: 0, bounce_num: 0, bounce_den: 0, bs_num: 0, bs_den: 0, dur_num: 0, dur_den: 0, vdur_num: 0, vdur_den: 0, clean: 0, suspect: 0, bot: 0, crawler: 0, conversions: 0, revenue: 0, fake: 0 });
 function addAcc(dst: Acc, s: Acc): void {
   dst.pv += s.pv; dst.uv += s.uv; dst.sessions += s.sessions;
   dst.bounce_num += s.bounce_num; dst.bounce_den += s.bounce_den;
@@ -573,6 +577,10 @@ function metricOf(a: Acc, metric: string): number | null {
     case 'uv': return a.uv;
     case 'sessions': return a.sessions;
     case 'clean_count': return a.clean;
+    case 'human_share': return a.pv ? (a.clean + a.suspect) / a.pv : null;
+    case 'forged_search': return a.fake;
+    case 'conversions': return a.conversions;
+    case 'revenue': return a.revenue;
     case 'suspect_count': return a.suspect;
     case 'bot_count': return a.bot;
     case 'crawler_count': return a.crawler;
@@ -632,7 +640,9 @@ async function subDaySeries(db: D1Database, siteId: string, period: Period, inte
 
   const tables = await eventTables(db, period.startTs, period.endTs);
   if (tables.length) {
-    const u = unionOver(tables, 'event, visitor_id, session_id, verdict, ts', siteId, period.startTs, period.endTs, ef.sql, ef.binds);
+    const outcomes = metric === 'conversions' || metric === 'revenue' || metric === 'forged_search';
+    const cols = 'event, visitor_id, session_id, verdict, ts' + (outcomes ? ', revenue_usd, bot_flags' : '');
+    const u = unionOver(tables, cols, siteId, period.startTs, period.endTs, ef.sql, ef.binds);
     const rows = await db.prepare(`
       SELECT CAST((ts - ?) / ? AS INTEGER) AS b,
         COALESCE(SUM(event = 'pageview'), 0) AS pv,
@@ -641,12 +651,16 @@ async function subDaySeries(db: D1Database, siteId: string, period: Period, inte
         COALESCE(SUM(event = 'pageview' AND verdict = 'clean'), 0) AS clean,
         COALESCE(SUM(event = 'pageview' AND verdict = 'suspect'), 0) AS suspect,
         COALESCE(SUM(event = 'pageview' AND verdict = 'bot'), 0) AS bot,
-        COALESCE(SUM(event = 'pageview' AND verdict = 'crawler'), 0) AS crawler
+        COALESCE(SUM(event = 'pageview' AND verdict = 'crawler'), 0) AS crawler${outcomes ? `, ${SITE_OUTCOME_SQL}` : ''}
       FROM (${u.sql}) GROUP BY b
     `).bind(period.startTs, step, ...u.binds).all<Acc & { b: number }>();
     for (const r of rows.results) {
       const a = accs[r.b];
-      if (a) { a.pv = r.pv; a.uv = r.uv; a.sessions = r.sessions; a.clean = r.clean; a.suspect = r.suspect; a.bot = r.bot; a.crawler = r.crawler; }
+      if (a) {
+        a.pv = r.pv; a.uv = r.uv; a.sessions = r.sessions;
+        a.clean = r.clean; a.suspect = r.suspect; a.bot = r.bot; a.crawler = r.crawler;
+        if (outcomes) { a.conversions = r.conversions; a.revenue = r.revenue; a.fake = r.fake; }
+      }
     }
   }
 
@@ -732,6 +746,7 @@ async function calendarSeries(db: D1Database, siteId: string, period: Period, in
     const a = emptyAcc();
     a.pv = ev.pv; a.uv = ev.uv; a.sessions = ev.sessions;
     a.clean = ev.clean_count; a.suspect = ev.suspect_count; a.bot = ev.bot_count; a.crawler = ev.crawler_count;
+    a.conversions = ev.conversions; a.revenue = ev.revenue; a.fake = ev.fake;
     if (needSess) {
       const sr = await sessionRaw(db, siteId, startTs, endTs, filters);
       a.bounce_num = sr.bounces; a.bounce_den = sr.sessions;
@@ -753,17 +768,21 @@ async function dailyAccs(db: D1Database, siteId: string, period: Period): Promis
   const map = new Map<string, Acc>();
   if (split.hasPast) {
     const rows = await db.prepare(`
-      SELECT day, pv, uv, sessions, bounce_rate, bounce_rate_single, avg_duration_ms, visit_duration_ms, clean_count, suspect_count, bot_count, crawler_count
+      SELECT day, pv, uv, sessions, bounce_rate, bounce_rate_single, avg_duration_ms, visit_duration_ms,
+             clean_count, suspect_count, bot_count, crawler_count,
+             COALESCE(conversions, 0) AS conversions, COALESCE(revenue_usd, 0) AS revenue, COALESCE(fake_pv, 0) AS fake
       FROM rollup_site_daily WHERE site_id = ? AND day BETWEEN ? AND ?
     `).bind(siteId, split.pastStart, split.pastEnd).all<{
       day: string; pv: number; uv: number; sessions: number; bounce_rate: number | null; bounce_rate_single: number | null;
       avg_duration_ms: number | null; visit_duration_ms: number | null;
       clean_count: number; suspect_count: number; bot_count: number; crawler_count: number;
+      conversions: number; revenue: number; fake: number;
     }>();
     for (const r of rows.results) {
       const a = emptyAcc();
       a.pv = r.pv; a.uv = r.uv; a.sessions = r.sessions;
       a.clean = r.clean_count; a.suspect = r.suspect_count; a.bot = r.bot_count; a.crawler = r.crawler_count;
+      a.conversions = r.conversions; a.revenue = r.revenue; a.fake = r.fake;
       if (r.bounce_rate != null) { a.bounce_num = r.bounce_rate * r.sessions; a.bounce_den = r.sessions; }
       if (r.bounce_rate_single != null) { a.bs_num = r.bounce_rate_single * r.sessions; a.bs_den = r.sessions; }
       if (r.avg_duration_ms != null) { a.dur_num = r.avg_duration_ms * r.sessions; a.dur_den = r.sessions; }
@@ -777,6 +796,7 @@ async function dailyAccs(db: D1Database, siteId: string, period: Period): Promis
     const a = emptyAcc();
     a.pv = ev.pv; a.uv = ev.uv; a.sessions = ev.sessions;
     a.clean = ev.clean_count; a.suspect = ev.suspect_count; a.bot = ev.bot_count; a.crawler = ev.crawler_count;
+    a.conversions = ev.conversions; a.revenue = ev.revenue; a.fake = ev.fake;
     a.bounce_num = sr.bounces; a.bounce_den = sr.sessions; a.bs_num = sr.bounces_single; a.bs_den = sr.sessions;
     a.dur_num = sr.duration_sum; a.dur_den = sr.sessions;
     a.vdur_num = sr.visit_duration_sum; a.vdur_den = sr.visit_duration_n;
