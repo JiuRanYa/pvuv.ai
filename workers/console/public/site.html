@@ -9,22 +9,26 @@
   /* page-specific: realtime strip, shadow banner, site switcher, chart tooltip,
      traffic-health strip, funnel, AI report prose */
   #cards .card { font: inherit; color: inherit; text-align: start; cursor: pointer; }
-  .rt { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--text-3); font-size: 13px; flex-wrap: wrap; }
-  .rt .rt-site { font-weight: 600; color: var(--text); padding-right: 10px; margin-right: 4px; border-right: 1px solid var(--border-2); }
-  .rt .live { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--text); }
-  .rt .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 rgba(52,211,153,.6); animation: pulse 1.8s infinite; }
-  @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
-  .rt svg { display: block; }
+  .dashboard-header { padding-inline: max(16px, calc((100% - 1148px) / 2)); }
+  .dashboard-header .brand { color: var(--text); font-size: 19px; letter-spacing: -.035em; }
+  .dashboard-header #lang { margin-inline-start: auto; }
+  .site-toolbar { position: relative; z-index: 35; display: flex; align-items: center; gap: 12px; max-width: 1180px; margin: 16px auto 0; padding: 0 16px; }
+  .site-toolbar select, .dashboard-header select { background-color: transparent; border-color: transparent; }
+  .site-toolbar #period { margin-inline-start: auto; }
+  .rt { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .rt:not(:empty)::before { content: ''; width: 8px; height: 8px; flex: none; border-radius: 50%; background: #10ae7f; }
   .shadow-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 9px 14px; border: 1px solid var(--warn-border); background: var(--warn-bg); color: var(--warn-text); border-radius: var(--radius); font-size: 13px; }
   .shadow-banner[hidden] { display: none; }
   .shadow-banner > span { flex: 1 1 320px; min-width: 0; }
   .shadow-banner .enforce { margin-left: auto; }
-  .switcher { position: relative; }
+  .switcher { position: relative; min-width: 0; }
+  .title-btn { max-width: 100%; }
+  #titleText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .title-btn { font: 700 16px var(--font); color: var(--text); background: none; border: 0; padding: 4px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 7px; }
   .title-btn:hover { background: var(--surface-2); }
   .title-btn .caret { color: var(--muted); font-size: 11px; font-weight: 400; }
   .switch-pop { position: absolute; top: 100%; left: 0; margin-top: 6px; width: 300px; max-width: 80vw; background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--radius); box-shadow: 0 10px 30px rgba(26,42,69,.15); z-index: 30; padding: 8px; }
-  .switch-pop input { width: 100%; background: var(--bg); margin-bottom: 6px; }
+  #switchSearch { width: 100%; font-size: 16px; background: var(--bg); margin-bottom: 6px; }
   .switch-pop ul { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; }
   .switch-pop li { padding: 7px 9px; border-radius: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
   .switch-pop li:hover, .switch-pop li.active { background: var(--surface-3); }
@@ -120,7 +124,7 @@
   .site-tools { position: relative; }
   .site-tools summary { cursor: pointer; list-style: none; }
   .site-tools summary::-webkit-details-marker { display: none; }
-  .site-tools summary::after { content: '▾'; color: var(--muted); }
+  .site-tools summary { display: grid; place-items: center; width: 40px; min-height: 40px; font-size: 22px; font-weight: 700; border-color: transparent; background: transparent; }
   .site-actions { position: absolute; z-index: 4; right: 0; top: calc(100% + 6px); display: grid; gap: 4px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 24px #2434511a; }
   .site-actions .btn { justify-content: flex-start; border-color: transparent; }
   #cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
@@ -136,7 +140,6 @@
   .sec[data-sec="overview"] { background: var(--surface); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 10px 10px; padding: 16px; box-shadow: 0 2px 4px #29243e09; }
   .sec[data-sec="overview"] .chart-head { margin: 0 0 14px; }
   #chart { border: 0; padding: 0; }
-  .rt-site { font-size: 19px; }
   .grid2 > div:where(:has(> .sec-head + .panel)) { margin-top: 18px; min-width: 0; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
   .grid2 > div > .sec-head:where(:has(+ .panel)) { align-items: center; margin: 0; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .grid2 .sec-head + .panel { border: 0; padding: 8px 0 0; }
@@ -168,17 +171,19 @@
     #cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
     #cards .card:nth-child(2n)::after { display: none; }
     #cards:has(+ .sec:not([hidden])) { margin-inline: -12px; border-inline: 0; border-radius: 0; }
-    .hdr-right { justify-content: flex-end; }
-    #period { margin-right: auto; order: -1; max-width: 44%; }
-    .switcher { position: static; min-width: 0; flex: 1; }
-    .switch-pop { left: 12px; top: 48px; }
-    .title-btn { max-width: 100%; }
-    #titleText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dashboard-header { padding: 4px 12px; }
+    .site-toolbar { gap: 4px; margin-top: 6px; padding: 0 12px; }
+    .site-toolbar select, .dashboard-header select { font-size: 16px; }
+    .site-toolbar #period { width: auto; field-sizing: content; max-width: 36%; }
+    .switcher { position: static; }
+    .switch-pop { inset-inline: 12px; top: 100%; width: auto; max-width: none; }
+    .title-btn { min-height: 44px; padding-inline: 2px; font-size: 14px; }
+    .rt { font-size: 12px; }
+    .site-toolbar .site-tools summary { width: 32px; padding: 0; }
     .sec[data-sec="overview"] { margin-inline: -12px; padding: 12px 6px 8px; border-inline: 0; border-radius: 0; }
     .sec[data-sec="overview"] .chart-head { margin: 0 6px 10px; justify-content: space-between; }
     .sec[data-sec="overview"] .chart-head h2 { width: auto; }
     #metric { display: none; } /* The eight metric buttons control the same selection. */
-    .rt .rt-site { display: none; }
     .chart-head h2 { width: 100%; }
     .chart-ctrls { margin-left: 0; }
   }
@@ -186,10 +191,13 @@
 </head>
 <body>
 <script src="/i18n.js"></script>
-<header>
-  <a href="/sites.html" data-i18n="← sites">← sites</a>
+<header class="dashboard-header">
+  <a class="brand" id="brand" href="/sites.html" data-i18n-title="← sites">pvuv.ai</a>
+  <select id="lang" aria-label="Language"></select>
+</header>
+<div class="site-toolbar">
   <div class="switcher" id="switcher">
-    <button class="title-btn" id="titleBtn" aria-haspopup="listbox" aria-expanded="false">
+    <button class="title-btn" id="titleBtn" aria-haspopup="listbox" aria-controls="switchList" aria-expanded="false">
       <span id="titleText">…</span><span class="caret">▾</span>
     </button>
     <div class="switch-pop" id="switchPop" hidden>
@@ -197,9 +205,7 @@
       <ul id="switchList" role="listbox"></ul>
     </div>
   </div>
-  <a id="visitorsLink" href="#" data-i18n="visitors →">visitors →</a>
-  <div class="hdr-right">
-  <select id="lang" aria-label="Language"></select>
+  <a class="rt" id="visitorsLink" href="#" data-i18n-title="visitors →"><span id="realtime"><span data-i18n="Visitors">Visitors</span></span></a>
   <select id="period" aria-label="Date range">
     <optgroup label="Rolling" data-i18n-label="Rolling">
       <option value="24h" data-i18n="Last 24 hours">Last 24 hours</option>
@@ -217,14 +223,13 @@
       <option value="this_year" data-i18n="This year">This year</option>
     </optgroup>
   </select>
-  <details class="site-tools"><summary class="btn" data-i18n="Settings">Settings</summary>
+  <details class="site-tools"><summary class="btn" data-i18n-title="Settings">⋮</summary>
   <div class="site-actions">
   <button id="embedBtn" class="btn" title="The tracking snippet for this site" data-i18n-title="The tracking snippet for this site">&lt;/&gt; <span data-i18n="Embed code">Embed code</span></button>
   <button id="shareBtn" class="btn" title="Read-only public dashboard link">🔗 <span data-i18n="Share link">Share link</span></button>
   <button id="dlBtn" class="btn" title="Download all data for the selected range as JSON">⬇ <span data-i18n="Download data">Download data</span></button>
   </div></details>
-  </div>
-</header>
+</div>
 <main>
   <nav class="secnav" aria-label="Sections"><ul id="secnav"></ul></nav>
   <!-- first-run state: shown instead of the dashboard until the site has recorded a single event -->
@@ -239,7 +244,6 @@
     </div>
     <p class="muted" style="font-size:12px;margin:14px 0 0" data-i18n="onboard-note">The snippet is the same one the site list shows after creation. <b>data-api</b> must be your ingest host; <b>data-adguard</b> only matters if you protect ads.</p>
   </section>
-  <div class="rt" id="realtime"></div>
   <div class="shadow-banner" id="shadowBanner" hidden></div>
   <div class="alerts" id="alerts"></div>
   <div class="anomalies" id="anomalies"></div>
@@ -445,6 +449,7 @@ function setTitle() {
 }
 async function loadBrand() {
   try { const b = await (await fetch('/api/home')).json(); if (b && b.name) brandName = b.name; } catch { /* keep default */ }
+  document.getElementById('brand').textContent = brandName;
   setTitle();
 }
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -1538,9 +1543,7 @@ async function pollRealtime() {
     const r = await fetch(`/api/sites/${site}/realtime?summary=1`);
     if (r.status === 401) { location.href = '/login.html'; return; }
     const d = await r.json();
-    document.getElementById('realtime').innerHTML =
-      `<span class="rt-site">${esc(siteName)}</span>` +
-      `<span class="live"><span class="pulse"></span>${fmt(d.online)} ${te('online now')}</span>`;
+    document.getElementById('realtime').textContent = fmt(d.online) + ' ' + t('online now');
   } catch { /* transient — keep the last value */ }
 }
 
@@ -1666,12 +1669,13 @@ function gotoSite(id) {
   if (id && id !== site) location.href = '/site.html?id=' + encodeURIComponent(id);
   else closeSwitch();
 }
-function openSwitch() {
+function openSwitch(focusSearch) {
   const pop = document.getElementById('switchPop');
   pop.hidden = false;
   document.getElementById('titleBtn').setAttribute('aria-expanded', 'true');
   const s = document.getElementById('switchSearch');
-  s.value = ''; renderSwitchList(''); s.focus();
+  s.value = ''; renderSwitchList('');
+  if (focusSearch) s.focus({ preventScroll: true });
 }
 function closeSwitch() {
   document.getElementById('switchPop').hidden = true;
@@ -1688,7 +1692,10 @@ function moveActive(delta) {
 }
 document.getElementById('titleBtn').addEventListener('click', (e) => {
   e.stopPropagation();
-  document.getElementById('switchPop').hidden ? openSwitch() : closeSwitch();
+  if (document.getElementById('switchPop').hidden) {
+    const keyboardOrMouse = e.detail === 0 || (e.pointerType ? e.pointerType === 'mouse' : matchMedia('(pointer: fine)').matches);
+    openSwitch(keyboardOrMouse);
+  } else closeSwitch();
 });
 document.getElementById('switchSearch').addEventListener('input', (e) => renderSwitchList(e.target.value));
 document.getElementById('switchSearch').addEventListener('keydown', (e) => {
