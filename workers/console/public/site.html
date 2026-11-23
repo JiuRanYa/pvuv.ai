@@ -9,8 +9,6 @@
   /* page-specific: realtime strip, shadow banner, site switcher, chart tooltip,
      traffic-health strip, funnel, AI report prose */
   #cards .card { font: inherit; color: inherit; text-align: start; cursor: pointer; }
-  #cards .card span { display: block; }
-  #cards .card:hover { border-color: var(--border-3); }
   .rt { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--text-3); font-size: 13px; flex-wrap: wrap; }
   .rt .rt-site { font-weight: 600; color: var(--text); padding-right: 10px; margin-right: 4px; border-right: 1px solid var(--border-2); }
   .rt .live { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--text); }
@@ -125,13 +123,14 @@
   .site-tools summary::after { content: '▾'; color: var(--muted); }
   .site-actions { position: absolute; z-index: 4; right: 0; top: calc(100% + 6px); display: grid; gap: 4px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 24px #2434511a; }
   .site-actions .btn { justify-content: flex-start; border-color: transparent; }
-  #cards { gap: 4px; padding: 7px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
-  #cards .card { border: 0; border-inline-end: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; }
-  #cards .card .k { order: -1; font-size: 12px; font-weight: 650; letter-spacing: .015em; max-width: 100%; }
-  #cards .card .v { font-size: 24px; font-weight: 650; max-width: 100%; }
-  #cards .card[aria-pressed="true"] { background: #f3f2f8; box-shadow: inset 3px 0 var(--accent); }
-  #cards .card[aria-pressed="true"] .k { color: var(--link); }
-  #cards .card:hover { background: var(--surface-2); }
+  #cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  #cards .card { position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; min-height: 65px; padding: 8px; border: 0; border-radius: 6px; }
+  #cards .card::after { content: ''; position: absolute; inset-block: 0; inset-inline-end: -9px; width: 1px; background: #e4e4e7; }
+  #cards .card:nth-child(4n)::after { display: none; }
+  #cards .card .k { color: #63636c; font-size: 12px; line-height: 16px; font-weight: 700; text-transform: uppercase; white-space: normal; }
+  #cards .card .v { max-width: 100%; color: var(--text); font-size: 20px; line-height: 26px; font-weight: 700; }
+  #cards .card:hover, #cards .card[aria-pressed="true"] { background: #f6f6f7; }
+  #cards .card[aria-pressed="true"] .k { color: var(--text); }
   #cards .card:focus-visible { outline-offset: -3px; }
   #cards:has(+ .sec:not([hidden])) { border-bottom: 0; border-radius: 10px 10px 0 0; }
   .sec[data-sec="overview"] { background: var(--surface); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 10px 10px; padding: 16px; box-shadow: 0 2px 4px #29243e09; }
@@ -165,15 +164,10 @@
   #pages { --report-bar: #fcf1e6; }
   #countries { --report-bar: #e6f4ef; }
   #devices { --report-bar: #eeebfa; }
-  @media (min-width: 1080px) { #cards { grid-template-columns: repeat(8, minmax(0,1fr)); } }
-  @media (min-width: 721px) and (max-width: 1079px) { #cards { grid-template-columns: repeat(4, minmax(0,1fr)); } }
   @media (max-width: 720px) {
-    #cards { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1px; padding: 4px; }
+    #cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    #cards .card:nth-child(2n)::after { display: none; }
     #cards:has(+ .sec:not([hidden])) { margin-inline: -12px; border-inline: 0; border-radius: 0; }
-    #cards .card { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; min-height: 46px; padding: 6px 10px; }
-    #cards .card .k { white-space: normal; line-height: 1.2; }
-    #cards .card .v { flex-shrink: 0; font-size: 18px; }
-    #cards .card .h { display: none; }
     .hdr-right { justify-content: flex-end; }
     #period { margin-right: auto; order: -1; max-width: 44%; }
     .switcher { position: static; min-width: 0; flex: 1; }
@@ -958,22 +952,20 @@ function populateControls() {
 function renderCards(o) {
   const perVisitor = o.uv ? (o.pv / o.uv).toFixed(2) : '–';
   const pct = (v) => v == null ? '–' : (v * 100).toFixed(1) + '%';
-  // k (label) and h (sub-label) are UI strings → translated; v is a value;
-  // help is the long explanation, shown as a tooltip so labels stay one line.
   const metric = document.getElementById('metric').value;
   const focused = document.activeElement?.closest('#cards [data-metric]')?.dataset.metric;
-  const card = (key, k, v, h, help) =>
+  const card = (key, label, value, help) =>
     `<button type="button" class="card" data-metric="${key}" aria-pressed="${metric === key}" aria-controls="chart" title="${esc(t(help))}">`
-    + `<span class="v">${v}</span><span class="k">${te(k)}</span><span class="h">${h ? te(h) : ''}</span></button>`;
+    + `<span class="k">${te(label)}</span><span class="v">${value}</span></button>`;
   document.getElementById('cards').innerHTML =
-    card('uv', 'Visitors', fmt(o.uv), 'unique people', 'Distinct visitors (by visitor id) in this range, bots and crawlers excluded') +
-    card('sessions', 'Sessions', fmt(o.sessions), 'visits', 'Visits — a new session starts after 30 minutes idle or at midnight') +
-    card('pv', 'Pageviews', fmt(o.pv), 'all traffic', 'Every recorded pageview, including traffic later judged invalid') +
-    card('pv_per_visitor', 'Pages / visitor', perVisitor, 'depth', 'Pageviews divided by visitors') +
-    card('avg_duration_ms', 'Engaged time', dur(o.avg_duration_ms), 'visible dwell', 'Average time the page was actually visible per visit, exit page included (measured, not inferred)') +
-    card('visit_duration_ms', 'Visit duration', dur(o.visit_duration_ms), 'first → last event', 'Classic session length: first to last event in the visit (Universal Analytics / Plausible definition — exit page counts as 0)') +
-    card('bounce_rate', 'Bounce (engaged)', pct(o.bounce_rate), 'GA4 style', 'Visits with no engagement: under 10s, no second page, no conversion (GA4 definition)') +
-    card('bounce_rate_single', 'Bounce (1-page)', pct(o.bounce_rate_single), 'Plausible style', 'Visits that saw exactly one page (Universal Analytics / Plausible definition)');
+    card('uv', 'Visitors', fmt(o.uv), 'Distinct visitors (by visitor id) in this range, bots and crawlers excluded') +
+    card('sessions', 'Sessions', fmt(o.sessions), 'Visits — a new session starts after 30 minutes idle or at midnight') +
+    card('pv', 'Pageviews', fmt(o.pv), 'Every recorded pageview, including traffic later judged invalid') +
+    card('pv_per_visitor', 'Pages / visitor', perVisitor, 'Pageviews divided by visitors') +
+    card('avg_duration_ms', 'Engaged time', dur(o.avg_duration_ms), 'Average time the page was actually visible per visit, exit page included (measured, not inferred)') +
+    card('visit_duration_ms', 'Visit duration', dur(o.visit_duration_ms), 'Classic session length: first to last event in the visit (Universal Analytics / Plausible definition — exit page counts as 0)') +
+    card('bounce_rate', 'Bounce (engaged)', pct(o.bounce_rate), 'Visits with no engagement: under 10s, no second page, no conversion (GA4 definition)') +
+    card('bounce_rate_single', 'Bounce (1-page)', pct(o.bounce_rate_single), 'Visits that saw exactly one page (Universal Analytics / Plausible definition)');
   if (focused) document.querySelector(`#cards [data-metric="${focused}"]`)?.focus({ preventScroll: true });
 }
 const money = (v) => '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
