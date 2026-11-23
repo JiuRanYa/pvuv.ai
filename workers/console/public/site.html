@@ -182,7 +182,7 @@
        queries the first time it is opened. Everything used to live on one
        long page and load at once, which on a busy site meant ~15 concurrent
        live scans and a screen full of skeletons. -->
-  <div class="cards" id="cards"></div>
+  <div class="cards cards-4" id="cards"></div>
 
   <section class="sec" data-sec="overview" hidden>
   <div class="chart-head">
@@ -668,8 +668,6 @@ const METRICS = [
   ['pv_per_visitor', 'Pages / visitor'],
   ['bounce_rate', 'Bounce rate (engaged)'], ['bounce_rate_single', 'Bounce rate (1-page)'],
   ['avg_duration_ms', 'Engaged time'], ['visit_duration_ms', 'Visit duration'],
-  ['human_share', 'Human share'], ['forged_search', 'Forged search'],
-  ['conversions', 'Conversions'], ['revenue', 'Revenue'],
 ];
 const METRIC_LABEL = Object.fromEntries(METRICS);
 const INTERVALS = {
@@ -683,8 +681,7 @@ const INTERVAL_LABEL = { minute: 'Minutes', hour: 'Hours', day: 'Days', week: 'W
 
 function fmtMetric(metric, v) {
   if (v == null) return '–';
-  if (metric === 'bounce_rate' || metric === 'bounce_rate_single' || metric === 'human_share') return pctf(v);
-  if (metric === 'revenue') return money(v);
+  if (metric === 'bounce_rate' || metric === 'bounce_rate_single') return pctf(v);
   if (metric === 'avg_duration_ms' || metric === 'visit_duration_ms') return dur(v);
   if (metric === 'pv_per_visitor') return Number(v).toFixed(2);
   return fmt(v);
@@ -693,12 +690,14 @@ function fmtMetric(metric, v) {
 // Pick a "nice" axis top + gridline step so the max sits just under a round
 // number and lines land on 1/2/5×10ⁿ values (462 → top 500 step 100; a few
 // thousand → step 500 or 1000). Targets ~5 gridlines.
-function niceStep(span) {
-  const raw = span / 5;                            // aim for ~5 intervals
+function niceScale(max) {
+  if (!(max > 0)) return { top: 1, step: 1 };
+  const raw = max / 5;                             // aim for ~5 intervals
   const pow = Math.pow(10, Math.floor(Math.log10(raw)));
   const frac = raw / pow;
   const nice = frac <= 1 ? 1 : frac <= 2 ? 2 : frac <= 5 ? 5 : 10;
-  return nice * pow;
+  const step = nice * pow;
+  return { top: Math.ceil(max / step) * step, step };
 }
 
 function lineChart(points, metric) {
@@ -710,21 +709,15 @@ function lineChart(points, metric) {
   const hasData = drawn.some((p) => p.value != null && (p.value !== 0 || p.pv > 0));
   if (!drawn.length || !hasData) { el.innerHTML = `<p class="muted">${te('no data yet')}</p>`; return; }
   const W = 980, H = 190, P = 46, PT = 12;
-  const values = drawn.map((p) => p.value ?? 0);
-  const min = Math.min(0, ...values);
-  const max = Math.max(metric === 'revenue' ? 0 : 1, ...values);
-  const step = niceStep(Math.max(max - min, 0.05));
-  const firstTick = Math.floor(min / step);
-  const lastTick = Math.max(firstTick + 1, Math.ceil(max / step));
-  const bottom = firstTick * step, top = lastTick * step;
+  const max = Math.max(...drawn.map((p) => p.value ?? 0), 1);
+  const { top, step } = niceScale(max);
   // x spans the full range (axis shows the whole period); future area stays empty
   const xs = (i) => P + (i * (W - P - 12)) / Math.max(points.length - 1, 1);
-  const ys = (v) => H - P - (((v ?? 0) - bottom) * (H - P - PT)) / (top - bottom);
+  const ys = (v) => H - P - ((v ?? 0) * (H - P - PT)) / top;
 
   // horizontal gridlines + left-axis value labels at each nice step
   const grid = [];
-  for (let tick = firstTick; tick <= lastTick; tick++) {
-    const g = tick * step;
+  for (let g = 0; g <= top + 1e-9; g += step) {
     const y = ys(g).toFixed(1);
     grid.push(`<line x1="${P}" y1="${y}" x2="${W - 12}" y2="${y}" stroke="#222834" stroke-width="1"/>`
       + `<text x="${P - 8}" y="${(Number(y) + 3.5).toFixed(1)}" text-anchor="end">${esc(fmtMetric(metric, g))}</text>`);
@@ -866,25 +859,16 @@ function populateControls() {
 
 // KPI cards. The two bounce definitions are shown as separate cards (more
 // direct than a toggle): "engaged" = GA4 style, "1-page" = UA/Plausible/Similarweb.
-function renderCards(o, al) {
-  const cleanShare = (o.pv ? ((o.clean_count + o.suspect_count) / o.pv) * 100 : 0).toFixed(1);
+function renderCards(o) {
   const perVisitor = o.uv ? (o.pv / o.uv).toFixed(2) : '–';
   const pct = (v) => v == null ? '–' : (v * 100).toFixed(1) + '%';
   // k (label) and h (sub-label) are UI strings → translated; v is a value;
   // help is the long explanation, shown as a tooltip so labels stay one line.
   const metric = document.getElementById('metric').value;
   const focused = document.activeElement?.closest('#cards [data-metric]')?.dataset.metric;
-  const card = (key, k, v, h, help, cls) =>
-    `<button type="button" class="card${cls ? ' ' + cls : ''}" data-metric="${key}" aria-pressed="${metric === key}" aria-controls="chart" title="${esc(t(help))}">`
+  const card = (key, k, v, h, help) =>
+    `<button type="button" class="card" data-metric="${key}" aria-pressed="${metric === key}" aria-controls="chart" title="${esc(t(help))}">`
     + `<span class="v">${v}</span><span class="k">${te(k)}</span><span class="h">${h ? te(h) : ''}</span></button>`;
-  // forged search-referrer traffic (the two new signals) + its share of
-  // search-referred visits — makes "fake Google" visible without SQL.
-  const st = (al && al.stats) || {};
-  const fakeN = st.fake_search || 0;
-  const fakeShare = st.search_pv ? `${(fakeN / st.search_pv * 100).toFixed(1)}% ${t('of search visits')}` : t('of search visits');
-  // Two rows of six: audience volume on top, quality & outcomes below. The
-  // conversion cards always render so the grid never goes ragged — a site
-  // without custom events simply shows a dash.
   document.getElementById('cards').innerHTML =
     card('uv', 'Visitors', fmt(o.uv), 'unique people', 'Distinct visitors (by visitor id) in this range, bots and crawlers excluded') +
     card('sessions', 'Sessions', fmt(o.sessions), 'visits', 'Visits — a new session starts after 30 minutes idle or at midnight') +
@@ -892,12 +876,8 @@ function renderCards(o, al) {
     card('pv_per_visitor', 'Pages / visitor', perVisitor, 'depth', 'Pageviews divided by visitors') +
     card('avg_duration_ms', 'Engaged time', dur(o.avg_duration_ms), 'visible dwell', 'Average time the page was actually visible per visit, exit page included (measured, not inferred)') +
     card('visit_duration_ms', 'Visit duration', dur(o.visit_duration_ms), 'first → last event', 'Classic session length: first to last event in the visit (Universal Analytics / Plausible definition — exit page counts as 0)') +
-    card('human_share', 'Human share', cleanShare + '%', 'of pageviews', 'Share of pageviews not judged bot or crawler') +
     card('bounce_rate', 'Bounce (engaged)', pct(o.bounce_rate), 'GA4 style', 'Visits with no engagement: under 10s, no second page, no conversion (GA4 definition)') +
-    card('bounce_rate_single', 'Bounce (1-page)', pct(o.bounce_rate_single), 'Plausible style', 'Visits that saw exactly one page (Universal Analytics / Plausible definition)') +
-    card('forged_search', 'Forged search', fmt(fakeN), fakeShare, 'Visits claiming a Google/Bing referral that the forgery checks rejected', fakeN > 0 ? 'card-warn' : '') +
-    card('conversions', 'Conversions', o.conversions ? fmt(o.conversions) : '–', 'custom events', 'Custom events sent by your site (signup, purchase …) from clean traffic') +
-    card('revenue', 'Revenue', o.revenue ? money(o.revenue) : '–', 'from events with revenue', 'Sum of the revenue property on custom events, in USD');
+    card('bounce_rate_single', 'Bounce (1-page)', pct(o.bounce_rate_single), 'Plausible style', 'Visits that saw exactly one page (Universal Analytics / Plausible definition)');
   if (focused) document.querySelector(`#cards [data-metric="${focused}"]`)?.focus({ preventScroll: true });
 }
 const money = (v) => '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1092,7 +1072,6 @@ function alertText(a) {
   return Object.entries(a.values).reduce((str, [k, v]) => str.split(`{${k}}`).join(v), window.PVI18N.tk(tpl[0], tpl[1]));
 }
 
-// Returns the full payload so renderCards can reuse its stats (forged-search etc.).
 async function loadAlerts() {
   const el = document.getElementById('alerts');
   let res = { alerts: [], stats: {} };
@@ -1400,14 +1379,10 @@ async function load() {
   // the header is the "overview" the page owes you immediately
   const ov = await get('overview');
   if (generation !== dataGen) return;
-  renderCards(ov, null);          // paint 11/12 cards the instant overview lands
+  renderCards(ov);
   renderShadowBanner(ov);
   renderSecNav();
-  const section = showSection(activeSec, { push: false });
-  const al = await loadAlerts();  // alerts scans more — refine the Forged-search card when it arrives
-  if (generation !== dataGen) return;
-  renderCards(ov, al);
-  await section;
+  await Promise.all([showSection(activeSec, { push: false }), loadAlerts()]);
 }
 
 // Suspicious-visitor table: folded to the top rows so the page doesn't grow
