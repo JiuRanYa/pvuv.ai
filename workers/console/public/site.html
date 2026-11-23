@@ -167,9 +167,14 @@
   #countries { --report-bar: #e6f4ef; }
   #devices { --report-bar: #eeebfa; }
   @media (max-width: 720px) {
-    #cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    main { margin-top: 8px; }
+    .secnav { padding-block: 2px; margin-top: 0; margin-bottom: 8px; }
+    #cards { grid-template-columns: repeat(2, minmax(0,1fr)); row-gap: 7px; }
+    #cards .card { min-height: 62px; gap: 4px; }
+    #cards .card .k { font-weight: 600; }
+    #cards .card .v { font-size: 21px; }
     #cards .card:nth-child(2n)::after { display: none; }
-    #cards:has(+ .sec:not([hidden])) { margin-inline: -12px; border-inline: 0; border-radius: 0; }
+    #cards:has(+ .sec:not([hidden])) { margin-inline: -6px; border-radius: 8px 8px 0 0; }
     .dashboard-header { padding: 4px 12px; }
     .site-toolbar { gap: 4px; margin-top: 6px; padding: 0 12px; }
     .site-toolbar select, .dashboard-header select { font-size: 16px; }
@@ -179,9 +184,11 @@
     .title-btn { min-height: 44px; padding-inline: 2px; font-size: 14px; }
     .rt { font-size: 12px; }
     .site-toolbar .site-tools summary { width: 32px; padding: 0; }
-    .sec[data-sec="overview"] { margin-inline: -12px; padding: 12px 6px 8px; border-inline: 0; border-radius: 0; }
-    .sec[data-sec="overview"] .chart-head { margin: 0 6px 10px; justify-content: space-between; }
+    .sec[data-sec="overview"] { margin-inline: -6px; padding: 8px 0 4px; border-radius: 0 0 8px 8px; }
+    .sec[data-sec="overview"]:not([hidden]) { display: flex; flex-direction: column; }
+    .sec[data-sec="overview"] .chart-head { order: 1; margin: 4px 12px 0; border-top: 1px solid var(--border); padding-top: 2px; justify-content: space-between; }
     .sec[data-sec="overview"] .chart-head h2 { width: auto; }
+    #chart svg polyline { stroke-width: 2; stroke-linejoin: round; }
     #metric { display: none; } /* The eight metric buttons control the same selection. */
     .chart-head h2 { width: 100%; }
     .chart-ctrls { margin-left: 0; }
