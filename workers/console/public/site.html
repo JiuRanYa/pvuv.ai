@@ -141,6 +141,20 @@
   .grid2 > div:has(> .sec-head + .panel) { margin-top: 18px; min-width: 0; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
   .grid2 > div > .sec-head:has(+ .panel) { align-items: center; margin: 0; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .grid2 .sec-head + .panel { border: 0; padding: 8px 0 0; }
+  .overview-report .grid2 { gap: 16px; }
+  .overview-report .grid2 > div { box-shadow: 0 2px 5px #29243e09; }
+  .overview-report .sec-head { flex-wrap: wrap; gap: 6px 10px; }
+  .overview-report .sec-head h2 { font-size: 15px; }
+  .overview-report .tabs { margin-left: 0; }
+  .overview-report .all-btn { margin-left: auto; }
+  .overview-report .panel { min-height: 100px; }
+  .overview-report table { table-layout: fixed; }
+  .overview-report .num { width: 70px; }
+  .overview-report .detail-col, .overview-report .report-note,
+  .overview-report tr[data-i]:nth-of-type(n+10) { display: none; }
+  .overview-report .lead-in { display: flex; }
+  .overview-report .lead { border-bottom-color: transparent; }
+  .overview-report .bar { top: 4px; bottom: 4px; }
   @media (min-width: 1080px) { #cards { grid-template-columns: repeat(8, minmax(0,1fr)); } }
   @media (min-width: 721px) and (max-width: 1079px) { #cards { grid-template-columns: repeat(4, minmax(0,1fr)); } }
   @media (max-width: 720px) {
@@ -226,10 +240,6 @@
   <div class="alerts" id="alerts"></div>
   <div class="anomalies" id="anomalies"></div>
   <div class="filters" id="filters"></div>
-  <!-- Only the active section is in the DOM flow, and a section runs its
-       queries the first time it is opened. Everything used to live on one
-       long page and load at once, which on a busy site meant ~15 concurrent
-       live scans and a screen full of skeletons. -->
   <div class="cards cards-4" id="cards"></div>
 
   <section class="sec" data-sec="overview" hidden>
@@ -244,14 +254,14 @@
 
   </section>
 
-  <section class="sec" data-sec="sources" hidden>
+  <section class="sec" data-sec="sources" data-overview-report hidden>
   <div class="grid2">
     <div><div class="sec-head"><h2 data-i18n="Top sources">Top sources</h2><span class="tabs" data-tabs="sources"></span><button class="all-btn" data-panel="sources" data-i18n="All →">All →</button></div><div class="panel" id="sources"></div></div>
     <div><div class="sec-head"><h2 data-i18n="Pages">Pages</h2><span class="tabs" data-tabs="pages"></span><button class="all-btn" data-panel="pages" data-i18n="All →">All →</button></div><div class="panel" id="pages"></div></div>
   </div>
   </section>
 
-  <section class="sec" data-sec="audience" hidden>
+  <section class="sec" data-sec="audience" data-overview-report hidden>
   <div class="grid2">
     <div><div class="sec-head"><h2 data-i18n="Locations">Locations</h2><span class="tabs" data-tabs="countries"></span><button class="all-btn" data-panel="countries" data-i18n="All →">All →</button></div><div class="panel" id="countries"></div></div>
     <div><div class="sec-head"><h2 data-i18n="Devices">Devices</h2><span class="tabs" data-tabs="devices"></span><button class="all-btn" data-panel="devices" data-i18n="All →">All →</button></div><div class="panel" id="devices"></div></div>
@@ -599,16 +609,17 @@ const dimConfig = {
 function breakdownTableHTML(dim, rows, clickable) {
   const cfg = dimConfig[dim];
   const max = Math.max(1, ...rows.map((r) => Number(cfg.bar(r)) || 0));
-  return `<table><tr>${cfg.headers.map((h, i) => `<th${i ? ' class="num"' : ''}>${te(h)}</th>`).join('')}</tr>`
+  const columnClass = (h) => h === 'Visitors' || h === 'PV' ? 'num' : 'num detail-col';
+  return `<table><tr>${cfg.headers.map((h, i) => `<th${i ? ` class="${columnClass(h)}"` : ''}>${te(h)}</th>`).join('')}</tr>`
     + rows.map((r, idx) => {
         const cells = cfg.cells(r);
         const pct = Math.max(2, (Number(cfg.bar(r)) || 0) / max * 100);
         const icon = cfg.icon ? cfg.icon(r) : '';
         const lead = `<td class="lead"><span class="bar" style="width:${pct.toFixed(1)}%"></span>`
           + `<span class="lead-in">${icon}<span class="txt">${cells[0]}</span>${clickable ? `<span class="drill">${te('+ filter')}</span>` : ''}</span></td>`;
-        return `<tr${clickable ? ' class="clickable"' : ''} data-i="${idx}">${lead}${cells.slice(1).map((c) => `<td class="num">${c}</td>`).join('')}</tr>`;
+        return `<tr${clickable ? ' class="clickable"' : ''} data-i="${idx}">${lead}${cells.slice(1).map((c, i) => `<td class="${columnClass(cfg.headers[i + 1])}">${c}</td>`).join('')}</tr>`;
       }).join('') + '</table>'
-    + (cfg.note ? `<p class="muted" style="margin:8px 0 0;font-size:11.5px">${te(cfg.note)}</p>` : '');
+    + (cfg.note ? `<p class="muted report-note" style="margin:8px 0 0;font-size:11.5px">${te(cfg.note)}</p>` : '');
 }
 
 // Fold rows that canonicalise to the same platform into one (legacy data
@@ -639,7 +650,7 @@ function renderBreakdown(elId, dim, rows) {
 
 // ── tabbed breakdown panels (Plausible-style dimension switchers)
 const PANELS = {
-  sources:   ['source', 'channel'],
+  sources:   ['source', 'channel', 'utm_campaign'],
   pages:     ['page', 'entry_page', 'exit_page'],
   countries: ['country', 'region', 'city'],
   devices:   ['browser', 'os', 'device', 'size'],
@@ -661,8 +672,18 @@ function buildTabs() {
 }
 async function loadPanel(mount) {
   const dim = panelState[mount];
-  const d = await get('breakdown', `&dim=${dim}`);
-  renderBreakdown(mount, dim, d.rows || []);
+  const generation = dataGen;
+  const panel = document.getElementById(mount);
+  panel.innerHTML = `<span class="loading">${te('loading…')}</span>`;
+  try {
+    const d = await get('breakdown', `&dim=${dim}`);
+    if (generation === dataGen && panelState[mount] === dim) renderBreakdown(mount, dim, d.rows || []);
+  } catch (error) {
+    if (generation === dataGen && panelState[mount] === dim) {
+      panel.innerHTML = `<p class="muted">${te('failed')}</p>`;
+      secLoadedAt.delete(panel.closest('[data-sec]').dataset.sec);
+    }
+  }
 }
 
 // "All …" — full (top-100) list of the panel's ACTIVE dimension in the modal.
@@ -1427,20 +1448,40 @@ async function loadQuality() {
     : `<p class="muted">${te('no signals fired — traffic looks clean')}</p>`;
 }
 
+async function ensureSection(sec) {
+  const generation = dataGen;
+  if (secLoadedAt.get(sec) === generation) return;
+  secLoadedAt.set(sec, generation);
+  try { await SECTION_LOADERS[sec](); } catch { if (dataGen === generation) secLoadedAt.delete(sec); }
+}
+
+const overviewReports = new IntersectionObserver((entries) => {
+  for (const { target, isIntersecting } of entries) {
+    if (!isIntersecting || activeSec !== 'overview') continue;
+    overviewReports.unobserve(target);
+    ensureSection(target.dataset.sec);
+  }
+}, { rootMargin: '100px 0px' });
+
 async function showSection(sec, { push = true } = {}) {
   if (!SECTION_LOADERS[sec]) sec = 'overview';
   activeSec = sec;
-  document.querySelectorAll('section.sec').forEach((el) => { el.hidden = el.dataset.sec !== sec; });
+  overviewReports.disconnect();
+  document.querySelectorAll('section.sec').forEach((el) => {
+    const report = sec === 'overview' && el.hasAttribute('data-overview-report');
+    el.hidden = el.dataset.sec !== sec && !report;
+    el.classList.toggle('overview-report', report);
+    if (report && secLoadedAt.get(el.dataset.sec) !== dataGen) overviewReports.observe(el);
+  });
   document.querySelectorAll('#secnav a').forEach((a) => a.classList.toggle('active', a.dataset.target === sec));
   if (push) history.replaceState(null, '', '#' + sec);
-  if (secLoadedAt.get(sec) === dataGen) return;      // already current
-  secLoadedAt.set(sec, dataGen);
-  try { await SECTION_LOADERS[sec](); } catch { secLoadedAt.delete(sec); }
+  await ensureSection(sec);
 }
 
 async function load() {
   const generation = ++dataGen;
   secLoadedAt.clear();
+  for (const mount of Object.keys(PANELS)) document.getElementById(mount).replaceChildren();
   // the header is the "overview" the page owes you immediately
   const ov = await get('overview');
   if (generation !== dataGen) return;
