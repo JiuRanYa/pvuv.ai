@@ -12,6 +12,9 @@
   footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 22px 0 30px; }
   footer a { color: inherit; }
   .err { max-width: 560px; margin: 80px auto; text-align: center; color: var(--text-3); }
+  @media (max-width: 720px) {
+    #chart { margin-inline: -12px; padding: 8px 0; border-inline: 0; border-radius: 0; }
+  }
 </style>
 </head>
 <body>
@@ -95,7 +98,9 @@ function lineChart(points) {
   const el = document.getElementById('chart');
   const drawn = points.filter((p) => p.status !== 'future');
   if (!drawn.length || !drawn.some((p) => p.value)) { el.innerHTML = `<p class="muted">${te('no data yet')}</p>`; return; }
-  const W = Math.max(240, el.clientWidth || document.documentElement.clientWidth - 50), H = 190, P = 40;
+  const W = Math.max(240, el.clientWidth || document.documentElement.clientWidth);
+  const H = matchMedia('(max-width: 720px)').matches ? Math.round(Math.max(300, Math.min(360, W * .9))) : 190;
+  const P = 40;
   const max = Math.max(...drawn.map((p) => p.value ?? 0), 1);
   const xs = (i) => P + (i * (W - P - 12)) / Math.max(points.length - 1, 1);
   const ys = (v) => H - 26 - ((v ?? 0) * (H - 44)) / max;

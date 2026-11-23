@@ -224,6 +224,8 @@ td.lead .lead-in > .txt { overflow: hidden; text-overflow: ellipsis; white-space
 
 @media (max-width: 720px) {
   header { position: relative; }
+  #chart svg text { font-size: 13px; }
+  #chart svg polyline { stroke-width: 2.5; }
   main { margin-top: 16px; padding-inline: 12px; }
   .secnav { top: 0; margin-inline: -12px; padding-inline: 12px; }
   .secnav a { padding: 9px 10px; }

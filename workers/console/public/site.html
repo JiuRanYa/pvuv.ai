@@ -141,7 +141,9 @@
   @media (max-width: 900px) { #cards { grid-template-columns: repeat(4, minmax(0,1fr)); } }
   @media (max-width: 720px) {
     #cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
-    #cards .card { padding: 10px 13px; }
+    #cards .card { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; min-height: 46px; padding: 6px 10px; }
+    #cards .card .k { white-space: normal; line-height: 1.2; }
+    #cards .card .v { flex-shrink: 0; font-size: 18px; }
     #cards .card .h { display: none; }
     .hdr-right { justify-content: flex-end; }
     #period { margin-right: auto; order: -1; max-width: 44%; }
@@ -149,7 +151,10 @@
     .switch-pop { left: 12px; top: 48px; }
     .title-btn { max-width: 100%; }
     #titleText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sec[data-sec="overview"] { padding: 12px; }
+    .sec[data-sec="overview"] { margin-inline: -12px; padding: 12px 6px 8px; border-inline: 0; border-radius: 0; }
+    .sec[data-sec="overview"] .chart-head { margin: 0 6px 10px; justify-content: space-between; }
+    .sec[data-sec="overview"] .chart-head h2 { width: auto; }
+    #metric { display: none; } /* The eight metric buttons control the same selection. */
     .rt .rt-site { display: none; }
     .chart-head h2 { width: 100%; }
     .chart-ctrls { margin-left: 0; }
@@ -756,7 +761,9 @@ function lineChart(points, metric) {
   const drawn = points.filter((p) => p.status !== 'future');
   const hasData = drawn.some((p) => p.value != null && (p.value !== 0 || p.pv > 0));
   if (!drawn.length || !hasData) { el.innerHTML = `<p class="muted">${te('no data yet')}</p>`; return; }
-  const W = Math.max(240, el.clientWidth || document.documentElement.clientWidth - 50), H = W < 600 ? 205 : 240, P = 46, PT = 12;
+  const W = Math.max(240, el.clientWidth || document.documentElement.clientWidth - 12);
+  const H = matchMedia('(max-width: 720px)').matches ? Math.round(Math.max(300, Math.min(360, W * .9))) : W < 600 ? 205 : 240;
+  const P = 46, PT = 12;
   const max = Math.max(...drawn.map((p) => p.value ?? 0), 1);
   const { top, step } = niceScale(max);
   // x spans the full range (axis shows the whole period); future area stays empty
