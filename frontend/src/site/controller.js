@@ -1,5 +1,5 @@
 import { renderInto, renderMetrics, renderTabStrip, renderReport as renderRankedReport, renderGoals, rowIcon } from './reportViews.jsx';
-import { sourceIconUrl } from './sourceIcons.js';
+import { sourceIconHTML, sourceIconView } from './sourceIcons.jsx';
 const site = new URLSearchParams(location.search).get('id');
 if (!site) location.href = '/sites.html';
 document.getElementById('visitorsLink').href = `/visitor.html?site=${encodeURIComponent(site)}`;
@@ -122,7 +122,7 @@ function sourceLabel(src) {
   return SOURCE_NAME[c] || (src.includes('.') ? c : src);
 }
 function sourceIcon(src) {
-  return `<img class="favi" alt="" src="${esc(sourceIconUrl(src, canonicalSource(src)))}">`;
+  return sourceIconHTML(src, canonicalSource(src));
 }
 const pctf = (x) => (x * 100).toFixed(1) + '%';
 const dur = (ms) => ms == null ? '–' : ms >= 60000 ? `${Math.floor(ms/60000)}m ${Math.round(ms%60000/1000)}s` : `${Math.round(ms/1000)}s`;
@@ -297,7 +297,7 @@ async function loadPanel(mount) {
     };
     const icon = row => {
       const key = String(row.key || '').toLowerCase();
-      if (dim === 'source') return rowIcon(sourceIconUrl(key, canonicalSource(key)));
+      if (dim === 'source') return sourceIconView(key, canonicalSource(key));
       if (dim === 'channel') return rowIcon(null, CHANNEL_ICON[key] || '↗');
       const domain = browserIcons[key];
       return rowIcon(domain && 'https://icons.duckduckgo.com/ip3/' + encodeURIComponent(domain) + '.ico', key.slice(0,1).toUpperCase());

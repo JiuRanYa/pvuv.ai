@@ -1,10 +1,12 @@
 import { DashboardHeader, DetailTabs, FilterMenu, ReportPanels } from './components.jsx';
+import { SourceSymbols } from './sourceIcons.jsx';
 import { mount } from '../mount.jsx';
 import './page.css';
 import './dashboard.css';
 
 function SitePage() {
   return <>
+    <SourceSymbols />
     <DashboardHeader />
 
     <div className="site-toolbar">

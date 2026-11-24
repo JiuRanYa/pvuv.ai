@@ -27,10 +27,37 @@ const countryPaths = {
   },
 };
 
+// Bundle only the logos used by the referral report.
+const sourceLogos = {
+  name: 'dashboard-source-logos',
+  resolveId(id) { if (id === 'virtual:source-logos') return '\0' + id; },
+  load(id) {
+    if (id !== '\0virtual:source-logos') return;
+    const logos = require('@iconify-json/logos/icons.json');
+    const fa = require('@iconify-json/fa6-brands/icons.json');
+    const names = {
+      google: 'google-icon', youtube: 'youtube-icon', bing: 'bing', duckduckgo: 'duckduckgo',
+      reddit: 'reddit-icon', facebook: 'facebook', twitch: 'twitch', github: 'github-icon',
+      chatgpt: 'openai-icon', perplexity: 'perplexity-icon', claude: 'claude-icon',
+      gemini: 'google-gemini-icon', instagram: 'instagram-icon', linkedin: 'linkedin-icon',
+      pinterest: 'pinterest', telegram: 'telegram', brave: 'brave', producthunt: 'producthunt',
+      hackernews: 'ycombinator', x: 'x',
+    };
+    function symbol(set, name, color) {
+      const { body, width = set.width, height = set.height } = set.icons[name];
+      return { body, viewBox: `0 0 ${width} ${height}`, color };
+    }
+    const icons = Object.fromEntries(Object.entries(names).map(([key, name]) => [key, symbol(logos, name)]));
+    icons.yandex = symbol(fa, 'yandex-international', '#e52222');
+    icons.yahoo = symbol(fa, 'yahoo', '#6001d2');
+    return 'export default ' + JSON.stringify(icons);
+  },
+};
+
 export default defineConfig({
   root: resolve('./'),
   publicDir: resolve('../workers/console/public'),
-  plugins: [countryPaths],
+  plugins: [countryPaths, sourceLogos],
   css: { postcss: { plugins: [tailwind({ base: resolve('./src') })] } },
   esbuild: { jsx: 'automatic' },
   server: { proxy: { '/api': 'http://127.0.0.1:8787' } },
