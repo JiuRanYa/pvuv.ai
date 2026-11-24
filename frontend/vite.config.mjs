@@ -36,7 +36,7 @@ const sourceLogos = {
     const logos = require('@iconify-json/logos/icons.json');
     const fa = require('@iconify-json/fa6-brands/icons.json');
     const names = {
-      google: 'google-icon', youtube: 'youtube-icon', bing: 'bing', duckduckgo: 'duckduckgo',
+      google: 'google-icon', youtube: 'youtube-icon',
       reddit: 'reddit-icon', facebook: 'facebook', twitch: 'twitch', github: 'github-icon',
       chatgpt: 'openai-icon', perplexity: 'perplexity-icon', claude: 'claude-icon',
       gemini: 'google-gemini-icon', instagram: 'instagram-icon', linkedin: 'linkedin-icon',

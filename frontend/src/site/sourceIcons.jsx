@@ -1,7 +1,9 @@
 import logos from 'virtual:source-logos';
-import { Globe, Link2, Swords } from 'lucide-react';
+import { Globe, Link2, Search, Swords } from 'lucide-react';
 
 const generic = {
+  bing: [Search, '#1986a0'],
+  duckduckgo: [Search, '#1986a0'],
   pathofexile: [Swords, '#805f2c'],
   direct: [Link2, '#52647a'],
   referral: [Globe, '#52647a'],
@@ -34,7 +36,7 @@ export function SourceSymbols() {
       )}
       {Object.entries(generic).map(([name, [Icon, color]]) =>
       <symbol id={'source-' + name} viewBox="0 0 24 24" key={name}>
-        <Icon size={24} color={color}/>
+        <Icon size={24} color={color} strokeWidth={2.4}/>
       </symbol>
     )}</defs>
   </svg>;
