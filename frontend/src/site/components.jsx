@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Activity, CalendarDays, ChartNoAxesCombined, ChevronDown, Globe, LayoutGrid, ListFilter, Maximize, Settings } from 'lucide-react';
+import { Activity, Bell, CalendarDays, ChartNoAxesCombined, ChevronDown, Globe, LayoutGrid, ListFilter, Maximize, Settings } from 'lucide-react';
 
 const tr = value => window.PVI18N.t(value);
 export const detailTabs = [
@@ -39,7 +39,9 @@ export function FilterMenu() {
     setValue('');
     menu.current.open = false;
   }
-  return <><details ref={menu} className="filter-menu"><summary className="toolbar-action" data-i18n-title="Filter"><ListFilter size={16}/><span data-i18n="Filter">Filter</span></summary>
+  return <><details className="alert-menu"><summary className="toolbar-action" data-i18n-title="Alerts"><Bell size={15}/></summary>
+    <div className="menu-box"><div className="alerts" id="alerts"/><div className="anomalies" id="anomalies"/></div>
+  </details><details ref={menu} className="filter-menu"><summary className="toolbar-action" data-i18n-title="Filter"><ListFilter size={16}/><span data-i18n="Filter">Filter</span></summary>
     <form className="menu-box filter-form" onSubmit={submit}><select aria-label={tr('Filter')} value={dim} onChange={e=>setDim(e.target.value)}>
       {Object.entries(dimensions).map(([key,label])=><option key={key} value={key} data-i18n={label}>{tr(label)}</option>)}
     </select><input required value={value} onChange={e=>setValue(e.target.value)} placeholder={dim==='page' ? '/guides' : tr(dimensions[dim])} aria-label={tr(dimensions[dim])}/>

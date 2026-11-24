@@ -58,8 +58,6 @@ function SitePage() {
         <p className="muted" style={{"fontSize": "12px", "margin": "14px 0 0"}} data-i18n="onboard-note">The snippet is the same one the site list shows after creation. <b>data-api</b> must be your ingest host; <b>data-adguard</b> only matters if you protect ads.</p>
       </section>
       <div className="shadow-banner" id="shadowBanner" hidden></div>
-      <div className="alerts" id="alerts"></div>
-      <div className="anomalies" id="anomalies"></div>
       <div className="filters" id="filters"></div>
       <div className="cards cards-4" id="cards"></div>
 
