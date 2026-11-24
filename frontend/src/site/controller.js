@@ -1,404 +1,4 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dashboard — pvuv.ai</title>
-<link rel="stylesheet" href="/console.css">
-<style>
-  /* page-specific: realtime strip, shadow banner, site switcher, chart tooltip,
-     traffic-health strip, funnel, AI report prose */
-  #cards .card { font: inherit; color: inherit; text-align: start; cursor: pointer; }
-  .dashboard-header { padding-inline: max(16px, calc((100% - 1148px) / 2)); }
-  .dashboard-header .brand { color: var(--text); font-size: 19px; letter-spacing: -.035em; }
-  .dashboard-header #lang { margin-inline-start: auto; }
-  .site-toolbar { position: relative; z-index: 35; display: flex; align-items: center; gap: 12px; max-width: 1180px; margin: 16px auto 0; padding: 0 16px; }
-  .site-toolbar select, .dashboard-header select { background-color: transparent; border-color: transparent; }
-  .site-toolbar #period { margin-inline-start: auto; }
-  .rt { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; }
-  .rt:not(:empty)::before { content: ''; width: 8px; height: 8px; flex: none; border-radius: 50%; background: #10ae7f; }
-  .shadow-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 9px 14px; border: 1px solid var(--warn-border); background: var(--warn-bg); color: var(--warn-text); border-radius: var(--radius); font-size: 13px; }
-  .shadow-banner[hidden] { display: none; }
-  .shadow-banner > span { flex: 1 1 320px; min-width: 0; }
-  .shadow-banner .enforce { margin-left: auto; }
-  .switcher { position: relative; min-width: 0; }
-  .title-btn { max-width: 100%; }
-  #titleText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .title-btn { font: 700 16px var(--font); color: var(--text); background: none; border: 0; padding: 4px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 7px; }
-  .title-btn:hover { background: var(--surface-2); }
-  .title-btn .caret { color: var(--muted); font-size: 11px; font-weight: 400; }
-  .switch-pop { position: absolute; top: 100%; left: 0; margin-top: 6px; width: 300px; max-width: 80vw; background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--radius); box-shadow: 0 10px 30px rgba(26,42,69,.15); z-index: 30; padding: 8px; }
-  .switch-pop ul { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; }
-  .switch-pop a { padding: 7px 9px; min-height: 44px; border-radius: 6px; display: flex; flex-direction: column; justify-content: center; gap: 1px; color: var(--text); text-decoration: none; }
-  .switch-pop a:hover, .switch-pop a:focus-visible { background: var(--surface-3); }
-  .switch-pop li .nm { font-weight: 600; }
-  .switch-pop [aria-current="page"] .nm::after { content: ' ✓'; color: var(--link); }
-  .switch-pop li .dm { color: var(--muted); font-size: 12px; }
-  .switch-pop .none { color: var(--muted); padding: 8px 9px; font-size: 13px; }
-  .flags { color: var(--muted); font-size: 12px; }
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-3); margin-top: 8px; }
-  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
-  .gbtn { display: inline-block; margin: 14px 2px 0; padding: 8px 13px; border: 1px solid var(--border-2); border-radius: var(--radius); font-size: 13px; }
-  .gbtn:hover { background: var(--surface-2); border-color: var(--border-3); text-decoration: none; }
-  .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 2px; }
-  .filters:empty { display: none; }
-  .filters .clear { background: none; border: 0; color: var(--muted); font-size: 12px; text-decoration: underline; }
-  .alerts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-  .alerts:empty { display: none; }
-  .alert { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; border-radius: var(--radius); border: 1px solid; font-size: 13px; }
-  .alert .ico { flex: 0 0 auto; }
-  .alert .body b { display: block; margin-bottom: 1px; }
-  .alert .body span { opacity: .85; }
-  .alert-warning { border-color: var(--warn-border); background: var(--warn-bg); color: var(--warn-text); }
-  .alert-critical { border-color: var(--bad-border); background: var(--bad-bg); color: var(--bad-text); }
-  .anomalies { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-  .anomalies:empty { display: none; }
-  .anomaly-hd { font-size: 12px; color: var(--muted); }
-  .anomaly { display: flex; align-items: baseline; gap: 10px; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); font-size: 12.5px; }
-  .anomaly .ico { flex: 0 0 auto; }
-  .anomaly .day { color: var(--muted); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
-  /* chart hover readout: crosshair + tooltip following the pointer */
-  #chart { position: relative; }
-  .tt { position: absolute; z-index: 5; pointer-events: none; white-space: nowrap; background: var(--bg); border: 1px solid var(--border-2); border-radius: 6px; padding: 7px 9px; font-size: 12px; line-height: 1.45; box-shadow: 0 6px 18px rgba(26,42,69,.15); transform: translate(-50%, -100%); }
-  .tt[hidden] { display: none; }
-  .tt .tl { color: var(--muted); margin-bottom: 2px; }
-  .tt .tv { font-weight: 600; }
-  .tt .ti { color: var(--bad); }
-  .tt .tp { color: var(--muted); font-style: italic; }
-  /* traffic-health strip */
-  .health { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
-  .hm { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
-  .hm .hl { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
-  .hm .hv { font-size: 20px; font-weight: 600; margin: 3px 0 6px; font-variant-numeric: tabular-nums; }
-  .hm .sub { font-size: 11px; color: var(--muted); }
-  .hbar { height: 4px; border-radius: 3px; background: var(--surface-3); overflow: hidden; position: relative; }
-  .hbar i { display: block; height: 100%; border-radius: 3px; }
-  .hbar .lim { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--muted-2); }
-  .hm.ok   .hv { color: var(--good-text); } .hm.ok   .hbar i { background: var(--good); }
-  .hm.near .hv { color: var(--warn); } .hm.near .hbar i { background: var(--warn); }
-  .hm.over .hv { color: var(--bad); } .hm.over .hbar i { background: var(--bad); }
-  .hm.over { border-color: var(--bad-border); }
-  /* funnel */
-  .fstep { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
-  .fstep .fnum { color: var(--muted); width: 16px; flex: 0 0 auto; }
-  .fstep select, .fstep input { background-color: var(--bg); }
-  .fstep input { flex: 1; min-width: 0; }
-  .fstep .fx { background: var(--surface-3); border: 0; color: var(--text-2); width: 22px; height: 22px; border-radius: 50%; flex: 0 0 auto; }
-  .fstep .fx:hover { background: var(--border-3); }
-  .frow { display: flex; align-items: center; gap: 12px; margin: 6px 0; }
-  .fbar-wrap { position: relative; flex: 1; height: 30px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
-  .fbar { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(59,130,246,.35); }
-  .flabel { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12.5px; white-space: nowrap; }
-  .fstat { flex: 0 0 auto; min-width: 118px; text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
-  .fhint { color: var(--muted); font-size: 12px; margin: 8px 2px 0; }
-  .fname-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
-  .fname-row input { flex: 0 1 240px; background-color: var(--bg); }
-  /* drop-off annotation between two funnel bars: how many left, and what the
-     behaviour signals say they were doing when they did */
-  .fdrop { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 1px 0 7px; padding: 3px 0 3px 12px; border-left: 2px dashed var(--border-2); font-size: 12.5px; color: var(--muted); }
-  .fdrop .fnum-drop { color: var(--warn); font-weight: 600; }
-  .fchip { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 9px; background: var(--surface-2); color: var(--text-2); font-size: 11.5px; line-height: 19px; white-space: nowrap; }
-  .fchip.bad { background: var(--bad-bg); color: var(--bad); }
-  .fchip.warn { background: var(--warn-bg); color: var(--warn); }
-  .fseg { margin-top: 18px; }
-  .fseg .worst { color: var(--warn); }
-  .fseg td.conv { font-weight: 600; }
-  /* first-run */
-  .onboard { margin: 0 0 18px; border-color: var(--border); background: var(--surface-2); }
-  .onboard pre { margin: 0; background: var(--surface-2); border: 1px solid var(--good-border); border-radius: var(--radius); padding: 12px 14px; white-space: pre-wrap; word-break: break-all; font: 12.5px/1.5 var(--mono); color: var(--good-text); }
-  body.onboarding main > :not(#onboard):not(.secnav) { display: none; }
-  body.onboarding .secnav { visibility: hidden; }
-  /* mobile: suspicious-visitor cards replace the wide table */
-  .mcards { display: none; }
-  @media (max-width: 720px) { .mtable { display: none; } .mcards { display: block; } }
-  /* AI report prose */
-  .ai-md { font-size: 13.5px; line-height: 1.65; color: var(--text-2); }
-  .ai-md h3 { font-size: 14px; margin: 16px 0 6px; color: var(--text); }
-  .ai-md h3:first-child { margin-top: 0; }
-  .ai-md p { margin: 6px 0; }
-  .ai-md ul { margin: 6px 0; padding-left: 20px; }
-  .ai-md li { margin: 3px 0; }
-  .ai-md strong { color: var(--text); }
-
-  .site-tools { position: relative; }
-  .site-tools summary { cursor: pointer; list-style: none; }
-  .site-tools summary::-webkit-details-marker { display: none; }
-  .site-tools summary { display: grid; place-items: center; width: 40px; min-height: 40px; font-size: 22px; font-weight: 700; border-color: transparent; background: transparent; }
-  .site-actions { position: absolute; z-index: 4; right: 0; top: calc(100% + 6px); display: grid; gap: 4px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 8px 24px #2434511a; }
-  .site-actions .btn { justify-content: flex-start; border-color: transparent; }
-  #cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
-  #cards .card { position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; min-height: 65px; padding: 8px; border: 0; border-radius: 6px; }
-  #cards .card::after { content: ''; position: absolute; inset-block: 0; inset-inline-end: -9px; width: 1px; background: #e4e4e7; }
-  #cards .card:nth-child(4n)::after { display: none; }
-  #cards .card .k { color: #63636c; font-size: 12px; line-height: 16px; font-weight: 700; text-transform: uppercase; white-space: normal; }
-  #cards .card .v { max-width: 100%; color: var(--text); font-size: 20px; line-height: 26px; font-weight: 700; }
-  #cards .card:hover, #cards .card[aria-pressed="true"] { background: #f6f6f7; }
-  #cards .card[aria-pressed="true"] .k { color: var(--text); }
-  #cards .card:focus-visible { outline-offset: -3px; }
-  #cards:has(+ .sec:not([hidden])) { border-bottom: 0; border-radius: 10px 10px 0 0; }
-  .sec[data-sec="overview"] { background: var(--surface); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 10px 10px; padding: 16px; box-shadow: 0 2px 4px #29243e09; }
-  .sec[data-sec="overview"] .chart-head { margin: 0 0 14px; }
-  #chart { border: 0; padding: 0; }
-  .grid2 > div:where(:has(> .sec-head + .panel)) { margin-top: 18px; min-width: 0; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
-  .grid2 > div > .sec-head:where(:has(+ .panel)) { align-items: center; margin: 0; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-  .grid2 .sec-head + .panel { border: 0; padding: 8px 0 0; }
-  .overview-report { margin-top: 18px; }
-  .overview-report .grid2 { gap: 18px; }
-  .overview-report .grid2 > div { margin: 0; min-height: 398px; padding: 8px clamp(12px, 1.5vw, 20px) 14px; border-radius: 8px; box-shadow: 0 1px 3px #27243e10; }
-  .overview-report .grid2 .sec-head { gap: 8px; flex-wrap: nowrap; padding: 0; }
-  .overview-report .sec-head h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .overview-report .tabs { flex: 1; min-width: 0; margin: 0; flex-wrap: nowrap; gap: 8px; overflow-x: auto; }
-  .overview-report .tabs button { flex: none; min-height: 42px; padding: 0 3px; border-radius: 0; font-size: 12px; font-weight: 650; }
-  .overview-report .tabs button.active { box-shadow: inset 0 -2px var(--text); }
-  .overview-report .all-btn { flex: none; min-height: 40px; color: var(--muted); }
-  .overview-report .panel { padding-top: 8px; }
-  .overview-report .panel > p:only-child { margin: 0; padding: 64px 12px; text-align: center; }
-  .overview-report table { table-layout: fixed; }
-  .overview-report th { height: 32px; padding: 2px 4px; font-size: 12px; border: 0; }
-  .overview-report td { height: 37px; padding: 4px 6px; border: 0; }
-  .overview-report .num { width: clamp(46px, 5vw, 64px); padding-inline: 2px; }
-  .overview-report .detail-col, .overview-report .report-note,
-  .overview-report tr[data-i]:nth-of-type(n+10) { display: none; }
-  .overview-report .lead-in { display: flex; }
-  .overview-report .drill { display: none; }
-  .overview-report .lead .bar { top: 3px; bottom: 3px; border-radius: 4px; background: var(--report-bar); }
-  #sources { --report-bar: #eaf2fc; }
-  #pages { --report-bar: #fcf1e6; }
-  #countries { --report-bar: #e6f4ef; }
-  #devices { --report-bar: #eeebfa; }
-  @media (max-width: 720px) {
-    main { margin-top: 8px; }
-    .secnav { padding-block: 2px; margin-top: 0; margin-bottom: 8px; }
-    #cards { grid-template-columns: repeat(2, minmax(0,1fr)); row-gap: 7px; }
-    #cards .card { min-height: 62px; gap: 4px; }
-    #cards .card .k { font-weight: 600; }
-    #cards .card .v { font-size: 21px; }
-    #cards .card:nth-child(2n)::after { display: none; }
-    #cards:has(+ .sec:not([hidden])) { margin-inline: -6px; border-radius: 8px 8px 0 0; }
-    .dashboard-header { padding: 4px 12px; }
-    .site-toolbar { gap: 4px; margin-top: 6px; padding: 0 12px; }
-    .site-toolbar select, .dashboard-header select { font-size: 16px; }
-    .site-toolbar #period { width: auto; field-sizing: content; max-width: 36%; }
-    .switcher { position: static; }
-    .switch-pop { inset-inline: 12px; top: 100%; width: auto; max-width: none; }
-    .title-btn { min-height: 44px; padding-inline: 2px; font-size: 14px; }
-    .rt { font-size: 12px; }
-    .site-toolbar .site-tools summary { width: 32px; padding: 0; }
-    .sec[data-sec="overview"] { margin-inline: -6px; padding: 8px 0 4px; border-radius: 0 0 8px 8px; }
-    .sec[data-sec="overview"]:not([hidden]) { display: flex; flex-direction: column; }
-    .sec[data-sec="overview"] .chart-head { order: 1; margin: 4px 12px 0; border-top: 1px solid var(--border); padding-top: 2px; justify-content: space-between; }
-    .sec[data-sec="overview"] .chart-head h2 { width: auto; }
-    #chart svg polyline { stroke-width: 2; stroke-linejoin: round; }
-    #metric { display: none; } /* The eight metric buttons control the same selection. */
-    .chart-head h2 { width: 100%; }
-    .chart-ctrls { margin-left: 0; }
-  }
-</style>
-</head>
-<body>
-<script src="/i18n.js"></script>
-<header class="dashboard-header">
-  <a class="brand" id="brand" href="/sites.html" data-i18n-title="← sites">pvuv.ai</a>
-  <select id="lang" aria-label="Language"></select>
-</header>
-<div class="site-toolbar">
-  <div class="switcher" id="switcher">
-    <button class="title-btn" id="titleBtn" aria-controls="switchPop" aria-expanded="false">
-      <span id="titleText">…</span><span class="caret">▾</span>
-    </button>
-    <div class="switch-pop" id="switchPop" hidden>
-      <ul id="switchList"></ul>
-    </div>
-  </div>
-  <a class="rt" id="visitorsLink" href="#" data-i18n-title="visitors →"><span id="realtime"><span data-i18n="Visitors">Visitors</span></span></a>
-  <select id="period" aria-label="Date range">
-    <optgroup label="Rolling" data-i18n-label="Rolling">
-      <option value="24h" data-i18n="Last 24 hours">Last 24 hours</option>
-      <option value="today" selected data-i18n="Today">Today</option>
-      <option value="7d" data-i18n="Last 7 days">Last 7 days</option>
-      <option value="30d" data-i18n="Last 30 days">Last 30 days</option>
-      <option value="90d" data-i18n="Last 90 days">Last 90 days</option>
-    </optgroup>
-    <optgroup label="Calendar" data-i18n-label="Calendar">
-      <option value="yesterday" data-i18n="Yesterday">Yesterday</option>
-      <option value="this_week" data-i18n="This week">This week</option>
-      <option value="last_week" data-i18n="Last week">Last week</option>
-      <option value="this_month" data-i18n="This month">This month</option>
-      <option value="last_month" data-i18n="Last month">Last month</option>
-      <option value="this_year" data-i18n="This year">This year</option>
-    </optgroup>
-  </select>
-  <details class="site-tools"><summary class="btn" data-i18n-title="Settings">⋮</summary>
-  <div class="site-actions">
-  <button id="embedBtn" class="btn" title="The tracking snippet for this site" data-i18n-title="The tracking snippet for this site">&lt;/&gt; <span data-i18n="Embed code">Embed code</span></button>
-  <button id="shareBtn" class="btn" title="Read-only public dashboard link">🔗 <span data-i18n="Share link">Share link</span></button>
-  <button id="dlBtn" class="btn" title="Download all data for the selected range as JSON">⬇ <span data-i18n="Download data">Download data</span></button>
-  </div></details>
-</div>
-<main>
-  <nav class="secnav" aria-label="Sections"><ul id="secnav"></ul></nav>
-  <!-- first-run state: shown instead of the dashboard until the site has recorded a single event -->
-  <section class="onboard panel" id="onboard" hidden>
-    <h2 style="margin:0 0 6px;color:var(--text)" data-i18n="Waiting for the first visit">Waiting for the first visit</h2>
-    <p class="muted" style="margin:0 0 14px" data-i18n="onboard-help">This site has not recorded any event yet. Add the snippet below to every page (before <code>&lt;/head&gt;</code> or at the end of <code>&lt;body&gt;</code>), open your site once, and this page switches to the dashboard by itself.</p>
-    <pre id="onboardSnippet"></pre>
-    <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
-      <button class="btn" id="onboardCopy" data-i18n="Copy snippet">Copy snippet</button>
-      <a class="btn" href="/health.html" data-i18n="Run self-check ↗">Run self-check ↗</a>
-      <span class="loading" id="onboardProbe" data-i18n="listening for events…">listening for events…</span>
-    </div>
-    <p class="muted" style="font-size:12px;margin:14px 0 0" data-i18n="onboard-note">The snippet is the same one the site list shows after creation. <b>data-api</b> must be your ingest host; <b>data-adguard</b> only matters if you protect ads.</p>
-  </section>
-  <div class="shadow-banner" id="shadowBanner" hidden></div>
-  <div class="alerts" id="alerts"></div>
-  <div class="anomalies" id="anomalies"></div>
-  <div class="filters" id="filters"></div>
-  <div class="cards cards-4" id="cards"></div>
-
-  <section class="sec" data-sec="overview" hidden>
-  <div class="chart-head">
-    <h2 id="chartTitle">Pageviews</h2>
-    <div class="chart-ctrls">
-      <select id="metric" aria-label="Metric"></select>
-      <select id="interval" aria-label="Interval"></select>
-    </div>
-  </div>
-  <div class="panel" id="chart"></div>
-
-  </section>
-
-  <section class="sec" data-sec="sources" data-overview-report hidden>
-  <div class="grid2">
-    <div><div class="sec-head"><h2 data-i18n="Top sources">Top sources</h2><span class="tabs" data-tabs="sources"></span><button class="all-btn" data-panel="sources" data-i18n="All →">All →</button></div><div class="panel" id="sources"></div></div>
-    <div><div class="sec-head"><h2 data-i18n="Pages">Pages</h2><span class="tabs" data-tabs="pages"></span><button class="all-btn" data-panel="pages" data-i18n="All →">All →</button></div><div class="panel" id="pages"></div></div>
-  </div>
-  </section>
-
-  <section class="sec" data-sec="audience" data-overview-report hidden>
-  <div class="grid2">
-    <div><div class="sec-head"><h2 data-i18n="Locations">Locations</h2><span class="tabs" data-tabs="countries"></span><button class="all-btn" data-panel="countries" data-i18n="All →">All →</button></div><div class="panel" id="countries"></div></div>
-    <div><div class="sec-head"><h2 data-i18n="Devices">Devices</h2><span class="tabs" data-tabs="devices"></span><button class="all-btn" data-panel="devices" data-i18n="All →">All →</button></div><div class="panel" id="devices"></div></div>
-  </div>
-
-  </section>
-
-  <section class="sec" data-sec="vitals" hidden>
-  <div id="vitalsSec" hidden>
-    <h2 data-i18n="Web Vitals">Web Vitals</h2>
-    <div class="panel" id="vitals"></div>
-  </div>
-
-    <p class="muted" id="vitalsEmpty" hidden data-i18n="no data yet">no data yet</p>
-  </section>
-
-  <section class="sec" data-sec="campaigns" hidden>
-  <div class="chart-head">
-    <h2 data-i18n="Campaigns (UTM)">Campaigns (UTM)</h2>
-    <div class="chart-ctrls">
-      <select id="utmDim" aria-label="UTM dimension">
-        <option value="utm_campaign" data-i18n="Campaign">Campaign</option>
-        <option value="utm_medium" data-i18n="Medium">Medium</option>
-        <option value="utm_term" data-i18n="Term">Term</option>
-        <option value="utm_content" data-i18n="Content">Content</option>
-        <option value="ft_source" data-i18n="FT source">FT source</option>
-        <option value="ft_medium" data-i18n="FT medium">FT medium</option>
-        <option value="ft_campaign" data-i18n="FT campaign">FT campaign</option>
-      </select>
-    </div>
-  </div>
-  <div class="panel" id="utm"></div>
-
-  </section>
-
-  <section class="sec" data-sec="goals" hidden>
-  <div id="goalsSection" hidden>
-    <h2 data-i18n="Goals (custom events)">Goals (custom events)</h2>
-    <div class="panel" id="goals"></div>
-  </div>
-  <div id="ctitSection" hidden>
-    <h2 data-i18n="Conversion timing">Conversion timing</h2>
-    <div class="panel" id="ctit"></div>
-  </div>
-
-    <p class="muted" id="goalsEmpty" hidden data-i18n="no data yet">no data yet</p>
-  </section>
-
-  <section class="sec" data-sec="funnel" hidden>
-  <div class="chart-head">
-    <h2 data-i18n="Funnel">Funnel</h2>
-    <div class="chart-ctrls">
-      <select id="funnelPick" aria-label="Saved funnels"></select>
-      <select id="funnelSeg" aria-label="Break down by">
-        <option value="" data-i18n="No breakdown">No breakdown</option>
-        <option value="source" data-i18n="By source">By source</option>
-        <option value="country" data-i18n="By country">By country</option>
-        <option value="device" data-i18n="By device">By device</option>
-        <option value="browser" data-i18n="By browser">By browser</option>
-        <option value="os" data-i18n="By OS">By OS</option>
-      </select>
-      <button id="funnelAdd" class="btn" data-i18n="+ step">+ step</button>
-      <button id="funnelRun" class="btn primary" data-i18n="Run">Run</button>
-    </div>
-  </div>
-  <p class="sec-desc" data-i18n="Clean traffic only — bots and crawlers never enter a funnel. Each drop shows what the people who left were doing on that step.">Clean traffic only — bots and crawlers never enter a funnel. Each drop shows what the people who left were doing on that step.</p>
-  <div class="panel">
-    <div id="funnelSteps"></div>
-    <div class="fname-row">
-      <input id="funnelName" maxlength="60" placeholder="Funnel name" data-i18n-ph="Funnel name">
-      <button id="funnelSave" class="btn" data-i18n="Save funnel">Save funnel</button>
-      <button id="funnelDel" class="btn danger" hidden data-i18n="Delete">Delete</button>
-      <span class="muted" id="funnelMsg" style="font-size:12px"></span>
-    </div>
-    <div id="funnelResult"></div>
-  </div>
-
-  </section>
-
-  <section class="sec" data-sec="quality" hidden>
-  <h2 data-i18n="Traffic quality">Traffic quality</h2>
-  <p class="sec-desc" data-i18n="How much of this range's traffic was invalid, which checks caught it, and how close each ratio is to its alert line.">How much of this range's traffic was invalid, which checks caught it, and how close each ratio is to its alert line.</p>
-  <div class="panel" id="health"></div>
-  <div class="grid2">
-    <div class="panel" id="quality"></div>
-    <div class="panel" id="flags"></div>
-  </div>
-  <div id="crawlerSec" hidden><div class="sec-head"><h2 data-i18n="Crawlers by category">Crawlers by category</h2></div><div class="panel" id="crawlers"></div></div>
-  <div id="edgeSec" hidden><div class="sec-head"><h2 data-i18n="What the script never saw">What the script never saw</h2></div><div class="panel" id="edge"></div></div>
-
-  </section>
-
-  <section class="sec" data-sec="adguard" hidden>
-  <h2 data-i18n="Ad protection">Ad protection</h2>
-  <div class="panel" id="adguard"></div>
-
-  </section>
-
-  <section class="sec" data-sec="suspicious" hidden>
-  <div class="sec-head"><h2 data-i18n="Suspicious visitors">Suspicious visitors</h2><a class="all-btn" id="trafficAll" href="#" data-i18n="All visitors →">All visitors →</a></div>
-  <p class="sec-desc" data-i18n="Visitors whose bot score reached 30 or more in this range, worst first — click one to replay its journey.">Visitors whose bot score reached 30 or more in this range, worst first — click one to replay its journey.</p>
-  <div class="panel" id="traffic"></div>
-
-  </section>
-
-  <section class="sec" data-sec="ai" hidden>
-  <div class="chart-head">
-    <h2 data-i18n="AI report">AI report</h2>
-    <div class="chart-ctrls">
-      <button id="aiGen" class="btn primary" data-i18n="Generate">Generate</button>
-    </div>
-  </div>
-  <div class="panel" id="aiReport"></div>
-  </section>
-
-</main>
-
-<div class="modal" id="modal" hidden>
-  <div class="modal-box">
-    <div class="modal-head"><b id="modalTitle"></b><button class="modal-x" id="modalClose" aria-label="Close">×</button></div>
-    <div class="modal-body" id="modalBody"></div>
-  </div>
-</div>
-<script>
+import { renderInto, renderMetrics, renderTabStrip, renderReport as renderRankedReport, renderGoals, rowIcon } from './reportViews.jsx';
 const site = new URLSearchParams(location.search).get('id');
 if (!site) location.href = '/sites.html';
 document.getElementById('visitorsLink').href = `/visitor.html?site=${encodeURIComponent(site)}`;
@@ -425,7 +25,7 @@ function saveFilters() { try { localStorage.setItem(FILTER_KEY, JSON.stringify(f
 function filterQS() { return filters.length ? `&filters=${encodeURIComponent(JSON.stringify(filters))}` : ''; }
 // `values` carries every raw key a merged display row stands for (see
 // mergeSources) so the server matches all of them; `value` stays the label.
-function addFilter(dim, value, values) {
+export function addFilter(dim, value, values) {
   if (!FILTER_UI.has(dim) || value == null) return;
   value = String(value);
   if (filters.some((f) => f.dim === dim && f.value === value)) return;
@@ -664,37 +264,53 @@ function renderBreakdown(elId, dim, rows) {
 
 // ── tabbed breakdown panels (Plausible-style dimension switchers)
 const PANELS = {
-  sources:   ['source', 'channel', 'utm_campaign'],
+  sources:   ['channel', 'source', 'utm_campaign'],
   pages:     ['page', 'entry_page', 'exit_page'],
-  countries: ['country', 'region', 'city'],
+  countries: ['map', 'country', 'region', 'city'],
   devices:   ['browser', 'os', 'device', 'size'],
 };
 const panelState = {}; // mount id → active dim
+const tabNames = { map: 'Map', page: 'Top pages', entry_page: 'Entry pages', exit_page: 'Exit pages', country: 'Countries', region: 'Regions', city: 'Cities', channel: 'Channels', browser: 'Browsers', os: 'Operating systems', device: 'Devices', utm_campaign: 'Campaigns' };
 function buildTabs() {
   for (const [mount, dims] of Object.entries(PANELS)) {
-    panelState[mount] = panelState[mount] || dims[0];
-    const host = document.querySelector(`.tabs[data-tabs="${mount}"]`);
-    if (!host) continue;
-    if (dims.length <= 1) { host.innerHTML = ''; continue; }
-    host.innerHTML = dims.map((d) => `<button data-dim="${d}"${d === panelState[mount] ? ' class="active"' : ''}>${te(dimConfig[d].label)}</button>`).join('');
-    host.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
-      panelState[mount] = b.dataset.dim;
-      host.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+    panelState[mount] ||= mount === 'sources' ? 'source' : dims[0];
+    const tabs = dims.map(dim => [dim, t(tabNames[dim] || dimConfig[dim].label)]);
+    renderTabStrip(document.querySelector('[data-tabs="' + mount + '"]'), tabs, panelState[mount], dim => {
+      panelState[mount] = dim;
+      buildTabs();
       loadPanel(mount);
-    }));
+    });
   }
 }
+const browserIcons = {chrome:'google.com', safari:'apple.com', firefox:'mozilla.org', edge:'microsoft.com', opera:'opera.com'};
 async function loadPanel(mount) {
   const dim = panelState[mount];
+  const queryDim = dim === 'map' ? 'country' : dim;
   const generation = dataGen;
   const panel = document.getElementById(mount);
-  panel.innerHTML = `<span class="loading">${te('loading…')}</span>`;
+  renderInto(panel, t('loading…'));
   try {
-    const d = await get('breakdown', `&dim=${dim}`);
-    if (generation === dataGen && panelState[mount] === dim) renderBreakdown(mount, dim, d.rows || []);
-  } catch (error) {
+    const data = await get('breakdown', '&dim=' + queryDim + (dim === 'map' ? '&limit=250' : ''));
+    if (data.error) throw new Error(data.error);
+    if (generation !== dataGen || panelState[mount] !== dim) return;
+    const cfg = dimConfig[queryDim];
+    const display = row => {
+      if (dim === 'source') return sourceLabel(row.key);
+      if (dim === 'channel') return t(CHANNEL_LABEL[row.key] || row.key);
+      if (dim === 'country') return countryLabel(row.key);
+      return cfg.val(row);
+    };
+    const icon = row => {
+      const key = String(row.key || '').toLowerCase();
+      const domain = dim === 'source' ? (key.includes('.') ? canonicalSource(key) : SOURCE_DOMAIN[key]) : browserIcons[key];
+      return rowIcon(domain && 'https://icons.duckduckgo.com/ip3/' + encodeURIComponent(domain) + '.ico', key === '(direct)' ? '↗' : key.slice(0,1).toUpperCase());
+    };
+    renderRankedReport(panel, {rows: prepRows(queryDim, data.rows || []), dim, label:t(cfg.headers[0]), display,
+      icon: ['source','browser'].includes(dim) ? icon : null, countryName:countryLabel,
+      choose: FILTER_UI.has(queryDim) ? row => addFilter(queryDim, cfg.val(row), row.keys) : null});
+  } catch {
     if (generation === dataGen && panelState[mount] === dim) {
-      panel.innerHTML = `<p class="muted">${te('failed')}</p>`;
+      renderInto(panel, t('failed'));
       secLoadedAt.delete(panel.closest('[data-sec]').dataset.sec);
     }
   }
@@ -702,7 +318,7 @@ async function loadPanel(mount) {
 
 // "All …" — full (top-100) list of the panel's ACTIVE dimension in the modal.
 async function openAll(mount) {
-  const dim = panelState[mount];
+  const dim = panelState[mount] === 'map' ? 'country' : panelState[mount];
   const cfg = dimConfig[dim];
   document.getElementById('modalTitle').textContent = `${t('All')} · ${t(cfg.label)}`;
   document.getElementById('modalBody').innerHTML = `<p class="loading">${te('loading…')}</p>`;
@@ -718,7 +334,7 @@ async function openAll(mount) {
     const r = rows[Number(tr.dataset.i)]; addFilter(dim, cfg.val(r), r.keys); closeModal();
   }));
 }
-document.querySelectorAll('.all-btn').forEach((b) => b.addEventListener('click', () => openAll(b.dataset.panel)));
+document.querySelectorAll('[data-panel]').forEach((b) => b.addEventListener('click', () => openAll(b.dataset.panel)));
 
 // Embed code — available at any time, not only on the first-run screen.
 document.getElementById('embedBtn').addEventListener('click', async () => {
@@ -802,8 +418,11 @@ function lineChart(points, metric) {
   const hasData = drawn.some((p) => p.value != null && (p.value !== 0 || p.pv > 0));
   if (!drawn.length || !hasData) { el.innerHTML = `<p class="muted">${te('no data yet')}</p>`; return; }
   const W = Math.max(240, el.clientWidth || document.documentElement.clientWidth - 12);
-  const H = matchMedia('(max-width: 720px)').matches ? Math.round(Math.max(300, Math.min(360, W * .9))) : W < 600 ? 205 : 300;
-  const P = 46, PT = 12;
+  const H = matchMedia('(max-width: 720px)').matches
+    ? Math.round(Math.max(300, Math.min(360, W * .9)))
+    : Math.round(Math.max(205, Math.min(390, W * .30)));
+  const compactDesktop = matchMedia('(min-width:721px) and (max-width:900px)').matches;
+  const P = compactDesktop ? 34 : 46, PT = compactDesktop ? 6 : 12;
   const max = Math.max(...drawn.map((p) => p.value ?? 0), 1);
   const { top, step } = niceScale(max);
   // x spans the full range (axis shows the whole period); future area stays empty
@@ -963,20 +582,18 @@ function renderCards(o) {
   const perVisitor = o.uv ? (o.pv / o.uv).toFixed(2) : '–';
   const pct = (v) => v == null ? '–' : (v * 100).toFixed(1) + '%';
   const metric = document.getElementById('metric').value;
-  const focused = document.activeElement?.closest('#cards [data-metric]')?.dataset.metric;
-  const card = (key, label, value, help) =>
-    `<button type="button" class="card" data-metric="${key}" aria-pressed="${metric === key}" aria-controls="chart" title="${esc(t(help))}">`
-    + `<span class="k">${te(label)}</span><span class="v">${value}</span></button>`;
-  document.getElementById('cards').innerHTML =
-    card('uv', 'Visitors', fmt(o.uv), 'Distinct visitors (by visitor id) in this range, bots and crawlers excluded') +
-    card('sessions', 'Sessions', fmt(o.sessions), 'Visits — a new session starts after 30 minutes idle or at midnight') +
-    card('pv', 'Pageviews', fmt(o.pv), 'Every recorded pageview, including traffic later judged invalid') +
-    card('pv_per_visitor', 'Pages / visitor', perVisitor, 'Pageviews divided by visitors') +
-    card('avg_duration_ms', 'Engaged time', dur(o.avg_duration_ms), 'Average time the page was actually visible per visit, exit page included (measured, not inferred)') +
-    card('visit_duration_ms', 'Visit duration', dur(o.visit_duration_ms), 'Classic session length: first to last event in the visit (Universal Analytics / Plausible definition — exit page counts as 0)') +
-    card('bounce_rate', 'Bounce (engaged)', pct(o.bounce_rate), 'Visits with no engagement: under 10s, no second page, no conversion (GA4 definition)') +
-    card('bounce_rate_single', 'Bounce (1-page)', pct(o.bounce_rate_single), 'Visits that saw exactly one page (Universal Analytics / Plausible definition)');
-  if (focused) document.querySelector(`#cards [data-metric="${focused}"]`)?.focus({ preventScroll: true });
+  const card = (key, label, value, help) => [key, t(label), value, t(help)];
+  const metrics = [
+    card('uv', 'Visitors', fmt(o.uv), 'Distinct visitors (by visitor id) in this range, bots and crawlers excluded'),
+    card('sessions', 'Sessions', fmt(o.sessions), 'Visits — a new session starts after 30 minutes idle or at midnight'),
+    card('pv', 'Pageviews', fmt(o.pv), 'Every recorded pageview, including traffic later judged invalid'),
+    card('pv_per_visitor', 'Pages / visitor', perVisitor, 'Pageviews divided by visitors'),
+    card('avg_duration_ms', 'Engaged time', dur(o.avg_duration_ms), 'Average time the page was actually visible per visit, exit page included (measured, not inferred)'),
+    card('visit_duration_ms', 'Visit duration', dur(o.visit_duration_ms), 'Classic session length: first to last event in the visit (Universal Analytics / Plausible definition — exit page counts as 0)'),
+    card('bounce_rate', 'Bounce (engaged)', pct(o.bounce_rate), 'Visits with no engagement: under 10s, no second page, no conversion (GA4 definition)'),
+    card('bounce_rate_single', 'Bounce (1-page)', pct(o.bounce_rate_single), 'Visits that saw exactly one page (Universal Analytics / Plausible definition)')
+  ];
+  renderMetrics(document.getElementById('cards'), metrics, metric);
 }
 const money = (v) => '$' + Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -1444,6 +1061,14 @@ const SECTION_LOADERS = {
 const SECTION_ORDER = ['overview', 'sources', 'audience', 'campaigns', 'funnel', 'goals', 'vitals', 'quality', 'adguard', 'suspicious', 'ai'];
 
 let activeSec = 'overview';
+let detailSec = 'goals';
+export function selectDetail(sec) {
+  detailSec = sec;
+  if (activeSec !== 'overview') return showSection(sec);
+  document.querySelectorAll('#detailCard section.sec').forEach(el => { el.hidden = el.dataset.sec !== sec; });
+  document.querySelectorAll('[data-detail]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.detail === sec)));
+  ensureSection(sec);
+}
 // bumped whenever the period or the filters change, so every section reloads
 // the next time it is opened instead of showing the previous range's numbers
 let dataGen = 0;
@@ -1471,7 +1096,7 @@ const overviewReports = new IntersectionObserver((entries) => {
   for (const { target, isIntersecting } of entries) {
     if (!isIntersecting || activeSec !== 'overview') continue;
     overviewReports.unobserve(target);
-    ensureSection(target.dataset.sec);
+    ensureSection(target.id === 'detailCard' ? detailSec : target.dataset.sec);
   }
 }, { rootMargin: '100px 0px' });
 
@@ -1479,9 +1104,15 @@ async function showSection(sec, { push = true } = {}) {
   if (!SECTION_LOADERS[sec]) sec = 'overview';
   activeSec = sec;
   overviewReports.disconnect();
+  const details = document.getElementById('detailCard');
+  const isDetail = !!details.querySelector('[data-sec="' + sec + '"]');
+  details.hidden = sec !== 'overview' && !isDetail;
+  if (isDetail) detailSec = sec;
+  document.querySelectorAll('[data-detail]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.detail === detailSec)));
+  if (sec === 'overview') overviewReports.observe(details);
   document.querySelectorAll('section.sec').forEach((el) => {
     const report = sec === 'overview' && el.hasAttribute('data-overview-report');
-    el.hidden = el.dataset.sec !== sec && !report;
+    el.hidden = el.dataset.sec !== sec && !report && !(sec === 'overview' && el.dataset.sec === detailSec);
     el.classList.toggle('overview-report', report);
     if (report && secLoadedAt.get(el.dataset.sec) !== dataGen) overviewReports.observe(el);
   });
@@ -1493,7 +1124,7 @@ async function showSection(sec, { push = true } = {}) {
 async function load() {
   const generation = ++dataGen;
   secLoadedAt.clear();
-  for (const mount of Object.keys(PANELS)) document.getElementById(mount).replaceChildren();
+  for (const mount of Object.keys(PANELS)) renderInto(document.getElementById(mount), null);
   // the header is the "overview" the page owes you immediately
   const ov = await get('overview');
   if (generation !== dataGen) return;
@@ -1586,6 +1217,7 @@ async function loadSiteName() {
     if (s) { if (s.name) siteName = s.name; siteDomainPrimary = siteDomain(s); siteShadowUntil = s.shadow_until || 0; }
   } catch { /* fall back to the id */ }
   document.getElementById('titleText').textContent = siteName;
+  document.getElementById('siteInitial').textContent = (siteName || '·').slice(0, 1).toUpperCase();
   renderSwitchList();
   setTitle();
   const me = allSites.find((x) => x.site_id === site);
@@ -2039,7 +1671,7 @@ async function loadGoals() {
   try { rows = (await get('breakdown', '&dim=goal')).rows || []; } catch { sec.hidden = true; loadCtit(false); return; }
   if (!rows.length) { sec.hidden = true; loadCtit(false); return; }
   sec.hidden = false;
-  renderBreakdown('goals', 'goal', rows);
+  renderGoals(document.getElementById('goals'), rows);
   loadCtit(true);
   // first visit: the default funnel is "/ → (event)". Fill the event with the
   // site's first goal and run it, so the section shows a result instead of a
@@ -2127,6 +1759,7 @@ function renderSecNav() {
     .join('');
   ul.querySelectorAll('a').forEach((a) => a.addEventListener('click', (e) => {
     e.preventDefault();
+    document.querySelector('.site-tools').open = false;
     showSection(a.dataset.target);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }));
@@ -2156,6 +1789,3 @@ document.addEventListener('pvuv:lang', () => {
   await loadSiteName(); load(); pollRealtime(); loadAnomalies();
 })();
 setInterval(pollRealtime, 15000);
-</script>
-</body>
-</html>

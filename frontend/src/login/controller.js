@@ -1,33 +1,3 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in — pvuv.ai</title>
-<link rel="stylesheet" href="/console.css">
-<style>
-  body { font-size: 15px; display: grid; place-items: center; min-height: 100vh; }
-  .card { width: min(360px, 92vw); border-radius: var(--radius-lg); padding: 28px; }
-  h1 { margin: 0 0 4px; font-size: 20px; }
-  p.sub { margin: 0 0 22px; color: var(--muted); font-size: 13px; }
-  .oauth a { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; padding: 11px; border: 1px solid var(--border-2); border-radius: var(--radius-sm); color: inherit; font-weight: 600; transition: background .12s, border-color .12s; }
-  .oauth a:hover { background: var(--surface-2); border-color: var(--border-3); text-decoration: none; }
-  .err { color: var(--bad); font-size: 13px; margin-top: 14px; min-height: 1em; }
-  .note { color: var(--muted); font-size: 13px; margin-top: 14px; }
-  .langrow { margin-top: 18px; text-align: center; }
-  .langrow select { background-color: var(--bg); color: var(--muted); font-size: 12px; min-height: 28px; padding: 3px 26px 3px 8px; }
-</style>
-</head>
-<body>
-<script src="/i18n.js"></script>
-<div class="card">
-  <h1>pvuv.ai</h1>
-  <p class="sub" data-i18n="self-hosted analytics · sign in">self-hosted analytics · sign in</p>
-  <div class="oauth" id="oauth"></div>
-  <div class="err" id="err"></div>
-  <div class="langrow"><select id="lang" aria-label="Language"></select></div>
-</div>
-<script>
 const t = (s) => window.PVI18N.t(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ERR = {
@@ -66,6 +36,3 @@ document.addEventListener('pvuv:lang', () => {
   window.PVI18N.applyStatic();
   if (lastProviders) renderProviders(lastProviders);
 });
-</script>
-</body>
-</html>

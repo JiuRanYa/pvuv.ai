@@ -1,7 +1,7 @@
 # pvuv.ai console worker — pvuv.ai apex  (PROJECT_PLAN.md §11, §18.6)
 #   Owner login, site registration (issue site_id + embed snippet),
 #   traffic dashboard, traffic-quality overview.
-#   Frontend: plain single-file HTML served from public/ (no framework).
+#   Frontend: Vite builds the React console and includes SDK and homepage assets.
 #
 # All ids are PLACEHOLDERS — see root wrangler.toml for security notes.
 # Secrets:
@@ -56,8 +56,12 @@ GITHUB_CLIENT_ID = ""
 # from js.pvuv.ai — see PROJECT_PLAN.md §2 "Static hosting").
 # run_worker_first: the homepage must hit the worker (instance-settings
 # rendering / home.html override) instead of being served as a raw asset.
+[build]
+command = "npm run build:console"
+watch_dir = "../../frontend"
+
 [assets]
-directory = "public"
+directory = "dist"
 binding = "ASSETS"
 run_worker_first = ["/", "/index.html"]
 

@@ -1,69 +1,3 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Self-check — pvuv.ai</title>
-<link rel="stylesheet" href="/console.css">
-<style>
-  body { font-size: 15px; line-height: 1.6; }
-  p.lead { color: var(--muted); }
-  .step { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; margin: 14px 0; }
-  .step h2 { font-size: 15px; margin: 0 0 4px; color: var(--text); }
-  .step .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
-  #env, #ingest, #e2e, #verdict { display: flex; flex-direction: column; }
-  .row { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); }
-  .row:first-of-type { border-top: 0; }
-  .ico { flex: none; width: 20px; text-align: center; font-weight: 700; }
-  .ok { color: var(--good); } .warn { color: var(--warn); } .fail { color: var(--bad); } .pending { color: var(--muted); }
-  .row .body { flex: 1; }
-  .row .label { font-weight: 600; }
-  .row .detail { color: var(--muted); font-size: 13px; }
-  .row .fix { color: var(--warn); font-size: 13px; margin-top: 2px; }
-  input#ingestUrl { width: 320px; max-width: 100%; background: var(--bg); }
-  label.small { display: block; color: var(--muted); font-size: 13px; margin: 4px 0; }
-  .summary { border-radius: var(--radius-lg); padding: 16px 18px; margin: 14px 0; font-weight: 600; }
-  .summary.good { background: var(--good-bg); color: var(--good-text); border: 1px solid var(--good-border); }
-  .summary.bad { background: var(--bad-bg); color: var(--bad-text); border: 1px solid var(--bad-border); }
-  .kv { font-size: 13px; color: var(--muted); margin-top: 8px; }
-</style>
-</head>
-<body>
-<header><a href="/sites.html">← console</a><b>Deployment self-check</b></header>
-<main class="narrow">
-  <p class="lead">This runs each part of your deployment end to end and tells you what works and what to fix. Nothing here touches your real sites' data — the live test uses a hidden <code>__pvuv_selftest</code> site.</p>
-
-  <div class="step">
-    <h2>1 · Environment</h2>
-    <p class="hint">Database, schema/migrations, secrets, scoring config, and KV — checked on the server.</p>
-    <div id="env"><div class="row"><span class="ico pending">•</span><div class="body"><span class="detail">not run yet</span></div></div></div>
-  </div>
-
-  <div class="step">
-    <h2>2 · Ingest endpoint</h2>
-    <p class="hint">Where your <code>f.js</code> sends events. Default is <code>in.&lt;your-domain&gt;</code> — change it if your ingest host differs.</p>
-    <label class="small">Ingest base URL</label>
-    <input id="ingestUrl" placeholder="https://in.example.com">
-    <div id="ingest" style="margin-top:10px"></div>
-  </div>
-
-  <div class="step">
-    <h2>3 · End-to-end event flow</h2>
-    <p class="hint">Sends a real test event to the ingest endpoint, then waits for it to appear in the database — proving ingest → Queue → consumer → D1, plus server-side enrichment and bot scoring.</p>
-    <div id="e2e"></div>
-  </div>
-
-  <div class="step">
-    <h2>4 · Fast verdict (/v)</h2>
-    <p class="hint">The ad-load decision endpoint used by adguard.</p>
-    <div id="verdict"></div>
-  </div>
-
-  <div id="summary"></div>
-  <p><button id="run" class="btn primary" style="min-height:38px;padding:8px 18px">Run self-check</button></p>
-  <p class="kv">Trouble? See the <a class="doc" href="https://github.com/qiayue/pvuv.ai/blob/main/DEPLOY.md#troubleshooting">deployment troubleshooting guide</a>.</p>
-</main>
-<script>
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const ICON = { ok: '✓', warn: '!', fail: '✕', pending: '•' };
@@ -182,6 +116,3 @@ $('ingestUrl').value = defaultIngest();
 $('run').addEventListener('click', run);
 // make sure we're logged in before showing anything actionable
 fetch('/api/me').then((r) => { if (r.status === 401) location.href = '/login.html'; });
-</script>
-</body>
-</html>

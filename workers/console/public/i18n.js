@@ -182,6 +182,7 @@
       'No click, scroll or page-leave in the whole session': '整场会话没有点击、滚动或离开事件',
       'Claim a search-engine referral that looks forged': '声称来自搜索引擎,但来源结构可疑',
     'Bot-detection checks that fired on suspicious traffic — one visit can trip several.': '在可疑流量上触发的机器人检测项——一次访问可能触发多项。',
+      'Map': '地图', 'Browsers': '浏览器', 'Operating systems': '操作系统', 'Top pages': '热门页面', 'Entry pages': '入口页', 'Exit pages': '出口页',
       '← sites': '← 站点', 'visitors →': '访客 →', 'Search sites…': '搜索站点…',
       'Rolling': '滚动', 'Calendar': '日历',
       'Last 24 hours': '最近 24 小时', 'Today': '今天', 'Last 7 days': '最近 7 天', 'Last 30 days': '最近 30 天', 'Last 90 days': '最近 90 天',

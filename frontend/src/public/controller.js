@@ -1,59 +1,3 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<title>Analytics — pvuv.ai</title>
-<link rel="stylesheet" href="/console.css">
-<style>
-  header .pub { font-size: 11.5px; color: var(--muted); border: 1px solid var(--border-2); border-radius: 10px; padding: 1px 8px; white-space: nowrap; }
-  .card .v { font-size: 20px; }
-  footer { text-align: center; color: var(--muted); font-size: 12.5px; padding: 22px 0 30px; }
-  footer a { color: inherit; }
-  .err { max-width: 560px; margin: 80px auto; text-align: center; color: var(--text-3); }
-  @media (max-width: 720px) {
-    #chart { margin-inline: -12px; padding: 8px 0; border-inline: 0; border-radius: 0; }
-  }
-</style>
-</head>
-<body>
-<script src="/i18n.js"></script>
-<header>
-  <b id="siteName">…</b><span class="pub" data-i18n="public dashboard">public dashboard</span>
-  <div class="hdr-right">
-    <select id="period" aria-label="Date range">
-      <option value="today" data-i18n="Today">Today</option>
-      <option value="7d" data-i18n="Last 7 days">Last 7 days</option>
-      <option value="30d" selected data-i18n="Last 30 days">Last 30 days</option>
-      <option value="90d" data-i18n="Last 90 days">Last 90 days</option>
-      <option value="this_month" data-i18n="This month">This month</option>
-      <option value="last_month" data-i18n="Last month">Last month</option>
-    </select>
-  </div>
-</header>
-<main id="main" hidden>
-  <div class="cards" id="cards"></div>
-
-  <h2 id="trendTitle" data-i18n="Visitors per day">Visitors per day</h2>
-  <div class="panel" id="chart"></div>
-
-  <div class="grid2">
-    <div><h2 data-i18n="Top pages">Top pages</h2><div class="panel" id="pages"></div></div>
-    <div><h2 data-i18n="Channels">Channels</h2><div class="panel" id="channels"></div></div>
-  </div>
-
-  <div id="vitalsSec" hidden>
-    <h2 data-i18n="Web Vitals">Web Vitals</h2>
-    <div class="panel" id="vitals"></div>
-  </div>
-</main>
-<div class="err" id="err" hidden>
-  <p><b data-i18n="This dashboard link is invalid or has been disabled.">This dashboard link is invalid or has been disabled.</b></p>
-  <p class="muted" data-i18n="Ask the site owner for a fresh link.">Ask the site owner for a fresh link.</p>
-</div>
-<footer>Powered by <a href="https://pvuv.ai">pvuv.ai</a> — <span data-i18n="analytics with invalid-traffic detection">analytics with invalid-traffic detection</span></footer>
-<script>
 const qs = new URLSearchParams(location.search);
 const site = qs.get('site'), key = qs.get('k');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -170,6 +114,3 @@ async function loadMeta() {
 document.getElementById('period').addEventListener('change', load);
 if (window.PVI18N) { window.PVI18N.applyStatic(); document.addEventListener('pvuv:lang', load); }
 if (site && key) { loadMeta(); load(); }
-</script>
-</body>
-</html>
