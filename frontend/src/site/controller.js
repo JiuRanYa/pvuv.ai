@@ -1,4 +1,5 @@
 import { renderInto, renderMetrics, renderTabStrip, renderReport as renderRankedReport, renderGoals, rowIcon } from './reportViews.jsx';
+import { sourceIconUrl } from './sourceIcons.js';
 const site = new URLSearchParams(location.search).get('id');
 if (!site) location.href = '/sites.html';
 document.getElementById('visitorsLink').href = `/visitor.html?site=${encodeURIComponent(site)}`;
@@ -77,8 +78,7 @@ function countryLabel(cc) {
   return cc || '(unknown)';
 }
 
-// source favicon (admin dashboard only): resolve common engines to their domain,
-// use DuckDuckGo's icon service (privacy-respecting), fall back to a link glyph.
+// Resolve common source names to the same domain as their referrer variants.
 const SOURCE_DOMAIN = {
   google: 'google.com', bing: 'bing.com', duckduckgo: 'duckduckgo.com', yahoo: 'yahoo.com',
   baidu: 'baidu.com', yandex: 'yandex.com', twitter: 'twitter.com', x: 'x.com',
@@ -86,7 +86,6 @@ const SOURCE_DOMAIN = {
   youtube: 'youtube.com', reddit: 'reddit.com', github: 'github.com', bilibili: 'bilibili.com',
   weibo: 'weibo.com', zhihu: 'zhihu.com', newsletter: '', email: '',
 };
-const GENERIC_ICON = "this.outerHTML='<span class=\\'favi-generic\\'>🔗</span>'";
 // Display-side twin of shared/source.ts canonicalSource(): rows recorded
 // before ingest-time canonicalisation (www.google.com, google.com.hk, t.co …)
 // still read as one platform. Filtering keeps the raw stored key.
@@ -123,11 +122,7 @@ function sourceLabel(src) {
   return SOURCE_NAME[c] || (src.includes('.') ? c : src);
 }
 function sourceIcon(src) {
-  if (!src || src === '(direct)') return '<span class="favi-generic" title="Direct / none">↗</span>';
-  const key = src.toLowerCase();
-  const domain = src.includes('.') ? canonicalSource(src) : SOURCE_DOMAIN[key];
-  if (!domain) return '<span class="favi-generic">🔗</span>';
-  return `<img class="favi" loading="lazy" alt="" src="https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico" onerror="${GENERIC_ICON}">`;
+  return `<img class="favi" alt="" src="${esc(sourceIconUrl(src, canonicalSource(src)))}">`;
 }
 const pctf = (x) => (x * 100).toFixed(1) + '%';
 const dur = (ms) => ms == null ? '–' : ms >= 60000 ? `${Math.floor(ms/60000)}m ${Math.round(ms%60000/1000)}s` : `${Math.round(ms/1000)}s`;
@@ -302,11 +297,13 @@ async function loadPanel(mount) {
     };
     const icon = row => {
       const key = String(row.key || '').toLowerCase();
-      const domain = dim === 'source' ? (key.includes('.') ? canonicalSource(key) : SOURCE_DOMAIN[key]) : browserIcons[key];
-      return rowIcon(domain && 'https://icons.duckduckgo.com/ip3/' + encodeURIComponent(domain) + '.ico', key === '(direct)' ? '↗' : key.slice(0,1).toUpperCase());
+      if (dim === 'source') return rowIcon(sourceIconUrl(key, canonicalSource(key)));
+      if (dim === 'channel') return rowIcon(null, CHANNEL_ICON[key] || '↗');
+      const domain = browserIcons[key];
+      return rowIcon(domain && 'https://icons.duckduckgo.com/ip3/' + encodeURIComponent(domain) + '.ico', key.slice(0,1).toUpperCase());
     };
     renderRankedReport(panel, {rows: prepRows(queryDim, data.rows || []), dim, label:t(cfg.headers[0]), display,
-      icon: ['source','browser'].includes(dim) ? icon : null, countryName:countryLabel,
+      icon: ['source','channel','browser'].includes(dim) ? icon : null, countryName:countryLabel,
       choose: FILTER_UI.has(queryDim) ? row => addFilter(queryDim, cfg.val(row), row.keys) : null});
   } catch {
     if (generation === dataGen && panelState[mount] === dim) {
