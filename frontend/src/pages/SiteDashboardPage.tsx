@@ -361,7 +361,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                 ...sites.map((s) => ({
                   value: s.site_id,
                   label: s.name,
-                  icon: <SiteBadgeIcon name={s.name} size={18} />,
+                  icon: <SiteBadgeIcon siteId={s.site_id} name={s.name} size={18} />,
                 })),
                 {
                   value: '__all__',
@@ -374,7 +374,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                   type="button"
                   className="h-8 px-1.5 -ml-1.5 rounded-md inline-flex items-center gap-2 text-[14.5px] font-semibold text-zinc-900 hover:bg-zinc-200/60 transition-colors cursor-pointer min-w-0"
                 >
-                  <SiteBadgeIcon name={currentSite?.name || 'T'} size={22} />
+                  <SiteBadgeIcon siteId={siteId} name={currentSite?.name || 'T'} size={22} />
                   <span className="truncate max-w-[22vw] sm:max-w-[240px]">
                     {currentSite?.name || siteId}
                   </span>

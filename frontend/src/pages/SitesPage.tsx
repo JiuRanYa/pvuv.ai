@@ -237,7 +237,7 @@ export function SitesPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <SiteBadgeIcon name={site.name} size={24} />
+                      <SiteBadgeIcon siteId={site.site_id} name={site.name} size={24} />
                       <div className="min-w-0">
                         <div className="text-[15.5px] font-semibold text-zinc-900 group-hover:text-indigo-600 transition-colors truncate">
                           {site.name}

@@ -130,7 +130,7 @@ export function PublicDashboardPage({ siteId, token }: { siteId: string; token: 
       <div className="sticky top-0 z-30 bg-[#fafafa]/95 backdrop-blur-xs">
         <div className="max-w-[1120px] mx-auto px-4 h-12 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
-            <SiteBadgeIcon name={siteName || 'T'} size={22} />
+            <SiteBadgeIcon siteId={siteId} name={siteName || 'T'} size={22} />
             <span className="text-[14.5px] font-semibold text-zinc-900 truncate">{siteName || siteId}</span>
             <span className="px-2 py-0.5 rounded bg-zinc-200/70 text-[11px] font-medium text-zinc-600">
               {lang === 'zh' ? '公开只读' : 'Public'}

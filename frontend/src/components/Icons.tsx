@@ -25,43 +25,17 @@ function BrandSvg({ d, fill }: { d: string; fill: string }) {
 }
 
 export function TallyLogo({ size = 28 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 32 32"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="shrink-0"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id="tally-logo-grad" x1="3" y1="2" x2="29" y2="30" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#6875f5" />
-          <stop offset="52%" stopColor="#5850ec" />
-          <stop offset="100%" stopColor="#4338ca" />
-        </linearGradient>
-      </defs>
-      <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#tally-logo-grad)" />
-      <path
-        d="M8.5 21.5L13.2 15.8L17.4 18.6L23.5 10.5"
-        stroke="#ffffff"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="23.5" cy="10.5" r="2.2" fill="#ffffff" />
-      <path
-        d="M8.5 24H23.5"
-        stroke="rgba(255,255,255,0.45)"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+  return <img src="/tally.svg" width={size} height={size} className="shrink-0" alt="" />;
 }
 
-export function SiteBadgeIcon({ name, size = 22 }: { name: string; size?: number }) {
+const siteIcons: Record<string, string> = {
+  jrUXdujT: '/site-icons/lootprism.svg',
+  SDiPdwJe: '/site-icons/poe-atlas-planner.png',
+};
+
+export function SiteBadgeIcon({ siteId, name, size = 22 }: { siteId: string; name: string; size?: number }) {
+  const src = siteIcons[siteId];
+  if (src) return <img src={src} width={size} height={size} className="shrink-0 object-contain" alt="" />;
   const initial = (name || 'T').trim().charAt(0).toUpperCase() || 'T';
   return (
     <span
