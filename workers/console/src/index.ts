@@ -125,6 +125,13 @@ export default {
       h.set('content-type', 'application/javascript; charset=utf-8');
       return new Response(asset.body, { status: asset.status, headers: h });
     }
+    // Serve Tally's SPA for dashboard links, OAuth redirects and shared bookmarks.
+    if (request.method === 'GET' || request.method === 'HEAD') {
+      const dashboardRoute = /^\/(?:sites|site|settings|login|visitor|public|health)(?:\.html)?\/?$|^\/sites\/[\w-]+(?:\/visitors(?:\/[^/]+)?)?\/?$|^\/share\/[\w-]+\/[\w-]+\/?$/;
+      if (dashboardRoute.test(url.pathname)) {
+        return env.ASSETS.fetch(new Request(new URL('/console', url), request));
+      }
+    }
     return env.ASSETS.fetch(request);
   },
 } satisfies ExportedHandler<Env>;
