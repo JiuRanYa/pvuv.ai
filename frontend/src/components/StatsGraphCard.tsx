@@ -131,15 +131,18 @@ export function StatsGraphCard({
   };
 
   const chart = useMemo(() => {
-    const vals = points.map((p) => (p.value === null || p.value === undefined ? 0 : p.value));
+    // The API includes future buckets to reserve the rest of the time axis.
+    const started = points.filter((p) => p.status !== 'future');
+    const xAt = (idx: number) => points.length <= 1 ? padL + plotW / 2 : padL + (idx / (points.length - 1)) * plotW;
+    const vals = started.map((p) => p.value ?? 0);
     const rawMax = vals.length ? Math.max(...vals) : 0;
     const yMax = isPct ? Math.max(0.2, Math.min(1, Math.ceil(rawMax * 5) / 5)) : niceMax(rawMax || 5);
     const ticks = 5;
     const yTicks = Array.from({ length: ticks + 1 }, (_, i) => (yMax / ticks) * i);
 
-    const coords = points.map((p, idx) => {
+    const coords = started.map((p, idx) => {
       const v = p.value ?? 0;
-      const x = points.length <= 1 ? padL + plotW / 2 : padL + (idx / (points.length - 1)) * plotW;
+      const x = xAt(idx);
       const y = padT + plotH - (yMax > 0 ? (v / yMax) * plotH : 0);
       return { x, y, v, p };
     });
@@ -178,7 +181,7 @@ export function StatsGraphCard({
     if (points.length === 1) {
       xLabels.push({
         idx: 0,
-        x: coords[0].x,
+        x: xAt(0),
         label: fmtBucketLabel(points[0].label ?? points[0].bucket, interval, lang),
       });
     } else if (xLabelCount > 1) {
@@ -190,7 +193,7 @@ export function StatsGraphCard({
         seen.add(idx);
         xLabels.push({
           idx,
-          x: coords[idx].x,
+          x: xAt(idx),
           label: fmtBucketLabel(points[idx].label ?? points[idx].bucket, interval, lang),
         });
       }
@@ -200,6 +203,8 @@ export function StatsGraphCard({
   }, [points, interval, lang, isPct, plotW, plotH]);
 
   const activePoint = hoverIdx !== null && chart.coords[hoverIdx] ? chart.coords[hoverIdx] : null;
+  const lastPoint = chart.coords.at(-1);
+  const inProgress = lastPoint?.p.status === 'partial' || lastPoint?.p.partial;
 
   return (
     <section className="plausible-card overflow-hidden">
@@ -271,16 +276,8 @@ export function StatsGraphCard({
               if (!chart.coords.length) return;
               const rect = e.currentTarget.getBoundingClientRect();
               const relX = ((e.clientX - rect.left) / rect.width) * W;
-              let best = 0;
-              let bestDist = Infinity;
-              for (let i = 0; i < chart.coords.length; i++) {
-                const d = Math.abs(chart.coords[i].x - relX);
-                if (d < bestDist) {
-                  bestDist = d;
-                  best = i;
-                }
-              }
-              setHoverIdx(best);
+              const idx = Math.max(0, Math.min(points.length - 1, Math.round((relX - padL) / plotW * (points.length - 1))));
+              setHoverIdx(idx < chart.coords.length ? idx : null);
             }}
             onPointerLeave={() => setHoverIdx(null)}
           >
@@ -346,9 +343,8 @@ export function StatsGraphCard({
               />
             )}
 
-            {/* Single-point dot */}
-            {chart.coords.length === 1 && (
-              <circle cx={chart.coords[0].x} cy={chart.coords[0].y} r={4} fill="#6366f1" />
+            {lastPoint && (inProgress || chart.coords.length === 1) && (
+              <circle cx={lastPoint.x} cy={lastPoint.y} r={3} fill={inProgress ? 'white' : '#6366f1'} stroke="#6366f1" strokeWidth={1.5} />
             )}
 
             {/* Subtle invalid-traffic indicator dots along baseline (only when >0 invalid events in bucket) */}
