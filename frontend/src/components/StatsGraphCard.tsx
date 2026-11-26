@@ -1,11 +1,11 @@
 import React, { useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
-import type { DashboardMetrics, TimeseriesPoint } from '../lib/types';
+import type { DashboardMetrics, Ga4Metrics, TimeseriesPoint } from '../lib/types';
 import { fmtBucketLabel, fmtCompact, fmtDecimal, fmtDuration, fmtNumber, fmtPct } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { Dropdown } from './Dropdown';
 
-export type MainMetricKey = 'uv' | 'sessions' | 'pv' | 'pv_per_visitor' | 'bounce_rate' | 'visit_duration_ms' | 'avg_duration_ms' | 'bounce_rate_single';
+export type MainMetricKey = 'uv' | 'sessions' | 'pv' | 'pv_per_visitor' | 'bounce_rate' | 'visit_duration_ms' | 'avg_duration_ms' | 'bounce_rate_single' | 'pv_per_session' | 'engagement_rate';
 
 function niceMax(val: number): number {
   if (!Number.isFinite(val) || val <= 0) return 5;
@@ -28,8 +28,9 @@ export function StatsGraphCard({
   onSelectInterval,
   allowedIntervals,
   loading,
+  ga4 = false,
 }: {
-  overview: Omit<DashboardMetrics, 'pv_per_visitor'> | null;
+  overview: (Omit<DashboardMetrics, 'pv_per_visitor'> | Ga4Metrics) | null;
   points: TimeseriesPoint[];
   activeMetric: MainMetricKey;
   onSelectMetric: (m: MainMetricKey) => void;
@@ -37,8 +38,11 @@ export function StatsGraphCard({
   onSelectInterval: (iv: string) => void;
   allowedIntervals: string[];
   loading?: boolean;
+  ga4?: boolean;
 }) {
   const { lang, t } = useI18n();
+  const ga4Overview = overview && 'engagement_rate' in overview ? overview : null;
+  const singleBounce = overview && 'bounce_rate_single' in overview ? overview.bounce_rate_single : null;
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const pagesPerVisitor = useMemo(() => {
@@ -55,38 +59,40 @@ export function StatsGraphCard({
   }> = [
     {
       key: 'uv',
-      label: t('kpi.uv'),
+      label: ga4 ? (lang === 'zh' ? '总用户数' : 'Total Users') : t('kpi.uv'),
       value: overview ? fmtCompact(overview.uv) : '—',
       title: overview ? fmtNumber(overview.uv) : undefined,
     },
     {
       key: 'sessions',
-      label: t('kpi.sessions'),
+      label: ga4 ? (lang === 'zh' ? '会话数' : 'Sessions') : t('kpi.sessions'),
       value: overview ? fmtCompact(overview.sessions) : '—',
       title: overview ? fmtNumber(overview.sessions) : undefined,
     },
     {
       key: 'pv',
-      label: t('kpi.pv'),
+      label: ga4 ? (lang === 'zh' ? '浏览量' : 'Views') : t('kpi.pv'),
       value: overview ? fmtCompact(overview.pv) : '—',
       title: overview ? fmtNumber(overview.pv) : undefined,
     },
     {
-      key: 'pv_per_visitor',
-      label: t('kpi.views_per_visit'),
-      value: overview ? fmtDecimal(pagesPerVisitor, 2) : '—',
+      key: ga4 ? 'pv_per_session' : 'pv_per_visitor',
+      label: ga4 ? (lang === 'zh' ? '每次会话浏览量' : 'Views per Session') : t('kpi.views_per_visit'),
+      value: ga4 ? (ga4Overview?.pv_per_session == null ? '—' : fmtDecimal(ga4Overview.pv_per_session, 2)) : overview ? fmtDecimal(pagesPerVisitor, 2) : '—',
     },
     {
       key: 'bounce_rate',
       label: t('kpi.bounce'),
-      value: overview ? fmtPct(overview.bounce_rate, 0) : '—',
+      value: overview ? fmtPct(overview.bounce_rate, ga4 ? 2 : 0) : '—',
     },
-    { key: 'bounce_rate_single', label: t('kpi.single_bounce'), value: overview ? fmtPct(overview.bounce_rate_single, 0) : '—' },
-    { key: 'avg_duration_ms', label: t('kpi.engaged_time'), value: overview ? fmtDuration(overview.avg_duration_ms) : '—' },
+    ga4
+      ? { key: 'engagement_rate', label: lang === 'zh' ? '互动率' : 'Engagement Rate', value: fmtPct(ga4Overview?.engagement_rate, 2) }
+      : { key: 'bounce_rate_single', label: t('kpi.single_bounce'), value: fmtPct(singleBounce, 0) },
+    { key: 'avg_duration_ms', label: ga4 ? (lang === 'zh' ? '每次会话平均互动时长' : 'Avg. Engagement / Session') : t('kpi.engaged_time'), value: overview?.avg_duration_ms != null ? fmtDuration(overview.avg_duration_ms) : '—' },
     {
       key: 'visit_duration_ms',
-      label: t('kpi.duration'),
-      value: overview ? fmtDuration(overview.visit_duration_ms) : '—',
+      label: ga4 ? (lang === 'zh' ? '平均会话时长' : 'Avg. Session Duration') : t('kpi.duration'),
+      value: overview?.visit_duration_ms != null ? fmtDuration(overview.visit_duration_ms) : '—',
     },
   ];
 
@@ -110,9 +116,9 @@ export function StatsGraphCard({
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
 
-  const isPct = activeMetric === 'bounce_rate' || activeMetric === 'bounce_rate_single';
+  const isPct = activeMetric === 'bounce_rate' || activeMetric === 'bounce_rate_single' || activeMetric === 'engagement_rate';
   const isDur = activeMetric === 'visit_duration_ms' || activeMetric === 'avg_duration_ms';
-  const isDec = activeMetric === 'pv_per_visitor';
+  const isDec = activeMetric === 'pv_per_visitor' || activeMetric === 'pv_per_session';
 
   const formatY = (v: number): string => {
     if (v === 0) return '0';

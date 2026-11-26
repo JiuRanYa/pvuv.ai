@@ -16,6 +16,7 @@ export interface MeResponse {
   user: string;
   timezone: string;
   ingest_host: string;
+  ga4_site?: string | null;
 }
 
 export interface HomeSettings {
@@ -316,6 +317,20 @@ export interface VisitorListRow {
 }
 
 export type DashboardMetrics = Pick<OverviewResponse, 'uv' | 'pv' | 'sessions' | 'bounce_rate' | 'bounce_rate_single' | 'avg_duration_ms' | 'visit_duration_ms'> & { pv_per_visitor: number };
+
+export type Ga4Metrics = Pick<OverviewResponse, 'uv' | 'pv' | 'sessions' | 'bounce_rate' | 'avg_duration_ms' | 'visit_duration_ms'> & {
+  pv_per_session: number | null;
+  engagement_rate: number | null;
+};
+
+export interface Ga4Report {
+  timezone: string;
+  interval: 'hour' | 'day';
+  overview: Ga4Metrics;
+  limited: boolean;
+  series: Array<{ label: string; status: string; metrics: Ga4Metrics }>;
+  rows: Record<string, BreakdownRow[]>;
+}
 
 export interface OnlineDashboardResponse {
   window_minutes: number;

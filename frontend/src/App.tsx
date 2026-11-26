@@ -2,6 +2,7 @@ import React from 'react';
 import { I18nProvider } from './lib/i18n';
 import { RouterProvider, useRouter } from './lib/router';
 import { SitesPage } from './pages/SitesPage';
+import { Ga4DashboardPage } from './pages/Ga4DashboardPage';
 import { SiteDashboardPage } from './pages/SiteDashboardPage';
 import { VisitorPage } from './pages/VisitorPage';
 import { HealthPage } from './pages/HealthPage';
@@ -15,6 +16,7 @@ function AppRoutes() {
     case 'sites':
       return <SitesPage />;
     case 'site':
+      if (new URLSearchParams(search).get('source') === 'ga4') return <Ga4DashboardPage key={route.siteId} siteId={route.siteId}/>;
       return <SiteDashboardPage key={route.siteId} siteId={route.siteId} />;
     case 'visitors':
       if (!route.vid && new URLSearchParams(search).get('online') === '1') return <SiteDashboardPage key={route.siteId} siteId={route.siteId} />;

@@ -25,6 +25,7 @@ import { parseBotDirectory } from '../../../shared/botdir';
 import { createToken } from '../../../shared/tokens';
 import { verifySession, SESSION_COOKIE } from '../../api/src/auth';
 import { generateSiteId, hmacSign, serializeCookie } from '../../../shared/ids';
+import { ga4Config, ga4Report } from './ga4';
 import { runDiagnostics, probeEvent } from './diagnostics';
 import {
   isProvider, configuredProviders, oauthStart, oauthCallback,
@@ -60,6 +61,8 @@ export interface Env {
   GITHUB_CLIENT_ID?: string;
   /** locale served at `/`; requests to /<DEFAULT_LANG> 301 there (default 'en') */
   DEFAULT_LANG?: string;
+  /** Cloudflare secret for the read-only GA4 property. */
+  GA4_REPORTING?: string;
 }
 
 const SESSION_TTL_MS = 7 * 86400e3;
@@ -306,6 +309,7 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
       // the console can't reliably derive this from its own hostname, so it is
       // deployment config (wrangler.toml [vars] INGEST_HOST)
       ingest_host: env.INGEST_HOST || '',
+      ga4_site: ga4Config(env.GA4_REPORTING)?.site_id ?? null,
     });
   }
 
@@ -764,6 +768,14 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
     const [, siteId, resource, subId, subResource] = m;
     const site = await env.DB.prepare('SELECT owner_id, timezone FROM sites WHERE site_id = ?').bind(siteId).first<{ owner_id: string; timezone: string }>();
     if (!site || site.owner_id !== user) throw new ApiError(403, 'not your site');
+
+    if (resource === 'ga4') {
+      const config = ga4Config(env.GA4_REPORTING);
+      if (!config || config.site_id !== siteId) throw new ApiError(404, 'GA4 reporting is not connected for this site');
+      const response = json(await ga4Report(config, url.searchParams));
+      response.headers.set('cache-control', 'private, no-store');
+      return response;
+    }
 
     // period resolved in the site's own timezone (rollups are keyed on it)
     const period = parsePeriod(url.searchParams.get('period'), site.timezone || 'UTC');

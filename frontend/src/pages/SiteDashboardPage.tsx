@@ -34,7 +34,7 @@ import {
   PERIOD_OPTIONS,
 } from '../lib/format';
 import { useI18n } from '../lib/i18n';
-import { useRouter } from '../lib/router';
+import { Link, useRouter } from '../lib/router';
 import { ActiveVisitorList } from '../components/ActiveVisitorList';
 import { Navbar } from '../components/Navbar';
 import { Dropdown } from '../components/Dropdown';
@@ -48,7 +48,9 @@ import { BottomInsightsCard, type BottomTabId } from '../components/BottomInsigh
 export function SiteDashboardPage({ siteId }: { siteId: string }) {
   const { lang, t } = useI18n();
   const { navigate, search, route } = useRouter();
-  const online = new URLSearchParams(search).get('online') === '1';
+  const params = new URLSearchParams(search);
+  const online = params.get('online') === '1';
+  const explicitTally = params.get('source') === 'tally';
   const setOnline = (enabled: boolean) => {
     const params = new URLSearchParams(search);
     if (enabled) params.set('online', '1');
@@ -134,6 +136,12 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
   useEffect(() => {
     void loadSitesAndMe();
   }, [loadSitesAndMe]);
+
+  useEffect(() => {
+    if (me?.ga4_site === siteId && !online && !explicitTally) {
+      navigate(`/sites/${siteId}?source=ga4`, { replace: true });
+    }
+  }, [me?.ga4_site, siteId, online, explicitTally, navigate]);
 
   // Adjust default interval when period changes
   const handlePeriodChange = (p: string) => {
@@ -302,7 +310,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
 
   const liveRows = (dim: string) => snapshot?.breakdown[dim] ?? [];
   const overview = online ? snapshot?.overview ?? null : historyOverview;
-  const points = online ? snapshot?.series.map(p => ({label: p.label, status: p.status, value: p.metrics[activeMetric]})) ?? [] : historyPoints;
+  const points = online ? snapshot?.series.map(p => ({label: p.label, status: p.status, value: p.metrics[activeMetric as keyof typeof p.metrics]})) ?? [] : historyPoints;
   const sourceRows = online ? liveRows(sourceDimension).slice(0,15) : historySourceRows;
   const pageRows = online ? liveRows(pageTab).slice(0,15) : historyPageRows;
   const geoRows = online ? liveRows(geoTab === 'map' ? 'country' : geoTab).slice(0,geoTab === 'map' ? 250 : 15) : historyGeoRows;
@@ -540,6 +548,9 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
 
       {/* Main Container (Plausible exact max-w-[1120px] px-4) */}
       <main className="max-w-[1120px] mx-auto px-4 pt-2 pb-16">
+        {me?.ga4_site === siteId && <Link to={`/sites/${siteId}?source=ga4`} className="inline-flex mb-3 text-sm font-medium text-indigo-700 hover:underline">
+          {lang === 'zh' ? '查看 GA4 官方报表' : 'View GA4 reports'}
+        </Link>}
         {/* Active Filter Chips */}
         {filters.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 mb-3">

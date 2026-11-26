@@ -799,3 +799,11 @@ Two things people miss:
   rebuilt `f.js` propagates to already-embedded sites automatically. Server-side
   changes (ingest scoring, API, dashboards, cron) take effect immediately on
   deploy. To force the SDK out at once, purge `/f.js` in the Cloudflare cache.
+
+### Google Analytics 4 reports
+
+Set the `GA4_REPORTING` Worker secret on the console Worker to enable the GA4 view for one site. Enable the Google Analytics Data API in the Google Cloud project of the reporting service account. Add that account as Viewer on the relevant GA4 property.
+
+The secret is one JSON object containing `site_id` (Tally site ID), `property_id` (numeric GA4 property ID), `time_zone` (the property's IANA timezone), and the service account's `client_email` and `private_key`. Include the numeric `stream_id` if the property covers more than one stream. Enter the object directly in Cloudflare's secret editor. The service account uses the Analytics read-only scope.
+
+The site's main dashboard opens the GA4 view once configured. The self-hosted dashboard remains available at `/sites/{id}?source=tally`. The GA4 view uses the property's calendar dates and displays official metrics plus average engagement time per session, calculated from the reported engagement duration and sessions. Shared public links and the Tally live view use the local collector.
