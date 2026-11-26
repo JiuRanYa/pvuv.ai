@@ -284,7 +284,9 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
       const dim = q.get('dim') ?? 'page';
       // aggregate dimensions only — nothing session/visitor-granular
       if (!['page', 'source', 'channel', 'country', 'device'].includes(dim)) throw new ApiError(400, 'dim not public');
-      resp = json(await breakdown(env.DB, siteId, dim, period, parseInt(q.get('limit') ?? '20', 10)));
+      const channel = dim === 'source' ? q.get('channel') : null;
+      resp = json(await breakdown(env.DB, siteId, dim, period, parseInt(q.get('limit') ?? '20', 10), null,
+        channel ? [{ dim: 'channel', value: channel }] : []));
     }
     if (!resp) throw new ApiError(404, 'not found');
     // modest shared cache: public pages may be embedded/linked widely

@@ -247,8 +247,8 @@ export const api = {
     apiFetch<TimeseriesResponse>(`/api/public/${siteId}/${token}/timeseries${qs({ metric, period, interval })}`, {
       skipAuthRedirect: true,
     }),
-  publicBreakdown: (siteId: string, token: string, dim: string, period: string, limit = 20) =>
-    apiFetch<BreakdownResponse>(`/api/public/${siteId}/${token}/breakdown${qs({ dim, period, limit })}`, {
+  publicBreakdown: (siteId: string, token: string, dim: string, period: string, limit = 20, channel?: string) =>
+    apiFetch<BreakdownResponse>(`/api/public/${siteId}/${token}/breakdown${qs({ dim, period, limit, channel })}`, {
       skipAuthRedirect: true,
     }),
   publicQuality: (siteId: string, token: string, period: string) =>

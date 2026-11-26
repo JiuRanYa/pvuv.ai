@@ -153,7 +153,7 @@ async function eventTables(db: D1Database, startTs: number, endTs: number): Prom
  *  double-count) without streaming rows into the isolate. */
 function unionOver(tables: string[], cols: string, siteId: string, startTs: number, endTs: number, extra = '', extraBinds: unknown[] = []):
   { sql: string; binds: unknown[] } {
-  const parts = tables.map((t) => `SELECT ${cols} FROM ${t} WHERE site_id = ? AND ts >= ? AND ts < ?${extra ? ` AND ${extra}` : ''}`);
+  const parts = tables.map((t) => `SELECT ${cols} FROM ${t} AS ev WHERE site_id = ? AND ts >= ? AND ts < ?${extra ? ` AND ${extra}` : ''}`);
   return { sql: parts.join(' UNION ALL '), binds: tables.flatMap(() => [siteId, startTs, endTs, ...extraBinds]) };
 }
 
@@ -179,6 +179,10 @@ const EVENT_FILTER: Record<string, (v: string) => { sql: string; binds: unknown[
   os: (v) => v === '(unknown)' ? { sql: 'os IS NULL', binds: [] } : { sql: 'os = ?', binds: [v] },
   region: (v) => v === '(unknown)' ? { sql: 'region IS NULL', binds: [] } : { sql: 'region = ?', binds: [v] },
   city: (v) => v === '(unknown)' ? { sql: 'city IS NULL', binds: [] } : { sql: 'city = ?', binds: [v] },
+  channel: (v) => ({
+    sql: "EXISTS (SELECT 1 FROM sessions s WHERE s.site_id = ev.site_id AND s.session_id = ev.session_id AND COALESCE(s.channel, '(unknown)') = ?)",
+    binds: [v],
+  }),
   source: (v) => v === '(direct)'
     ? { sql: '(utm_source IS NULL AND ref_domain IS NULL)', binds: [] }
     : { sql: 'COALESCE(utm_source, ref_domain) = ?', binds: [v] },
@@ -197,6 +201,7 @@ const SESSION_FILTER: Record<string, (v: string) => { sql: string; binds: unknow
   page: (v) => ({ sql: 'entry_page = ?', binds: [v] }),
   country: (v) => v === '(unknown)' ? { sql: 'country IS NULL', binds: [] } : { sql: 'country = ?', binds: [v] },
   device: (v) => ({ sql: 'device_type = ?', binds: [v] }),
+  channel: (v) => ({ sql: "COALESCE(channel, '(unknown)') = ?", binds: [v] }),
   source: (v) => v === '(direct)' ? { sql: 'source IS NULL', binds: [] } : { sql: 'source = ?', binds: [v] },
   utm_campaign: (v) => ({ sql: 'campaign = ?', binds: [v] }),
   utm_medium: (v) => ({ sql: 'medium = ?', binds: [v] }),
@@ -1072,7 +1077,7 @@ export async function quality(db: D1Database, siteId: string, period: Period, fi
   const flags: Record<string, number> = {};
   for (const table of await eventTables(db, period.startTs, period.endTs)) {
     const row = await db.prepare(
-      `SELECT ${flagCols} FROM ${table} WHERE site_id = ? AND event = 'pageview' AND ts >= ? AND ts < ?${ef.sql ? ` AND ${ef.sql}` : ''}`,
+      `SELECT ${flagCols} FROM ${table} AS ev WHERE site_id = ? AND event = 'pageview' AND ts >= ? AND ts < ?${ef.sql ? ` AND ${ef.sql}` : ''}`,
     ).bind(siteId, period.startTs, period.endTs, ...ef.binds).first<Record<FlagName, number>>();
     for (const n of ALL_FLAGS) flags[n] = (flags[n] ?? 0) + (row?.[n] ?? 0);
   }
@@ -1652,7 +1657,7 @@ export async function traffic(
         MAX(ts) AS last_ts, MIN(ts) AS first_ts,
         MAX(country) AS country, MAX(browser) AS browser, MAX(os) AS os,
         MAX(asn_type) AS asn_type, MAX(path) AS path
-      FROM ${table} WHERE ${conds.join(' AND ')}
+      FROM ${table} AS ev WHERE ${conds.join(' AND ')}
       GROUP BY visitor_id ORDER BY bot_score DESC LIMIT ?
     `).bind(...binds, limit).all<V>();
     for (const r of rows.results) {

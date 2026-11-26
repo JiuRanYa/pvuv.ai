@@ -7,6 +7,7 @@ import {
   countryName,
   defaultIntervalForPeriod,
   displaySourceLabel,
+  displayChannelLabel,
   PERIOD_OPTIONS,
 } from '../lib/format';
 import { useI18n } from '../lib/i18n';
@@ -30,6 +31,7 @@ export function PublicDashboardPage({ siteId, token }: { siteId: string; token: 
   const [points, setPoints] = useState<TimeseriesPoint[]>([]);
   const [sources, setSources] = useState<BreakdownRow[]>([]);
   const [sourceTab, setSourceTab] = useState<string>('source');
+  const [sourceChannel, setSourceChannel] = useState<string>();
   const [pages, setPages] = useState<BreakdownRow[]>([]);
   const [countries, setCountries] = useState<BreakdownRow[]>([]);
   const [geoTab, setGeoTab] = useState<string>('map');
@@ -59,16 +61,14 @@ export function PublicDashboardPage({ siteId, token }: { siteId: string; token: 
     Promise.all([
       api.publicOverview(siteId, token, period),
       api.publicTimeseries(siteId, token, activeMetric, period, interval),
-      api.publicBreakdown(siteId, token, sourceTab, period, 15),
       api.publicBreakdown(siteId, token, 'page', period, 15),
       api.publicBreakdown(siteId, token, 'country', period, 200),
       api.publicBreakdown(siteId, token, 'device', period, 15),
     ])
-      .then(([ov, ts, src, pg, cn, dv]) => {
+      .then(([ov, ts, pg, cn, dv]) => {
         if (!alive) return;
         setOverview(ov);
         setPoints(ts.points ?? []);
-        setSources(src.rows ?? []);
         setPages(pg.rows ?? []);
         setCountries(cn.rows ?? []);
         setDevices(dv.rows ?? []);
@@ -82,7 +82,17 @@ export function PublicDashboardPage({ siteId, token }: { siteId: string; token: 
     return () => {
       alive = false;
     };
-  }, [siteId, token, period, interval, activeMetric, sourceTab, notFound]);
+  }, [siteId, token, period, interval, activeMetric, notFound]);
+
+  useEffect(() => {
+    if (notFound) return;
+    let alive = true;
+    setSources([]);
+    api.publicBreakdown(siteId, token, sourceTab, period, 15, sourceChannel)
+      .then(res => { if (alive) setSources(res.rows ?? []); })
+      .catch(() => { if (alive) setSources([]); });
+    return () => { alive = false; };
+  }, [siteId, token, period, sourceTab, sourceChannel, notFound]);
 
   const allowedIntervals = useMemo(() => {
     if (period === 'today' || period === 'yesterday' || period === '24h') return ['hour'];
@@ -173,18 +183,22 @@ export function PublicDashboardPage({ siteId, token }: { siteId: string; token: 
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
           <BreakdownCard
+            key={sourceTab}
             tabs={[
               { id: 'channel', label: t('card.channels') },
               { id: 'source', label: t('card.sources') },
             ]}
             activeTab={sourceTab}
-            onTabChange={setSourceTab}
+            onTabChange={tab => { setSourceChannel(undefined); setSourceTab(tab); }}
             tone="blue"
-            leftColLabel={sourceTab === 'channel' ? t('col.channel') : t('col.source')}
+            leftColLabel={sourceTab === 'channel' ? t('col.channel') : sourceChannel ? `${t('col.source')} · ${displayChannelLabel(sourceChannel, lang)}` : t('col.source')}
             rightColLabel={t('col.visitors')}
             rows={sources}
             getRowKey={(r) => r.key || '(direct)'}
-            getRowLabel={(r) => (sourceTab === 'source' ? displaySourceLabel(r.key, lang) : r.key || '(none)')}
+            getRowLabel={(r) => (sourceTab === 'source' ? displaySourceLabel(r.key, lang) : displayChannelLabel(r.key, lang))}
+            onRowClick={sourceTab === 'channel' ? r => {
+              if (r.key) { setSourceChannel(r.key); setSourceTab('source'); }
+            } : undefined}
             getRowValue={(r) => r.uv || r.pv || 0}
             renderIcon={(r) => (sourceTab === 'source' ? <SourceIcon source={r.key || ''} /> : null)}
           />

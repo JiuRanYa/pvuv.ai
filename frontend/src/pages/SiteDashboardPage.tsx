@@ -175,6 +175,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
   useEffect(() => {
     let alive = true;
     setSourceLoading(true);
+    setSourceRows([]);
     api
       .breakdown(siteId, sourceTab, period, 15, filters)
       .then((res) => {
@@ -577,6 +578,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
             {/* 2. Breakdown Row 1: Sources (Blue) & Top Pages (Orange) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
               <BreakdownCard
+                key={sourceTab}
                 tabs={[
                   { id: 'channel', label: t('card.channels') },
                   { id: 'source', label: t('card.sources') },
@@ -621,7 +623,10 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                   ) : null
                 }
                 onRowClick={(r) => {
-                  if (sourceTab === 'channel' || sourceTab === 'source' || sourceTab.startsWith('utm_')) {
+                  if (sourceTab === 'channel' && r.key) {
+                    addFilter('channel', r.key);
+                    setSourceTab('source');
+                  } else if (sourceTab === 'source' || sourceTab.startsWith('utm_')) {
                     addFilter(sourceTab, r.key || '(direct)');
                   }
                 }}
