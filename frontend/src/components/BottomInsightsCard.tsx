@@ -60,17 +60,19 @@ export function BottomInsightsCard({
   onSiteUpdated,
   isPublic = false,
   publicToken,
+  goalsOnly = false,
 }: {
   site: SiteRecord;
   period: string;
   filters: FilterItem[];
-  overview: OverviewResponse | null;
+  overview: Pick<OverviewResponse, 'uv'> | null;
   goals: BreakdownRow[];
   activeTab: BottomTabId;
   onTabChange: (tab: BottomTabId) => void;
   onSiteUpdated?: () => void;
   isPublic?: boolean;
   publicToken?: string;
+  goalsOnly?: boolean;
 }) {
   const { lang, t } = useI18n();
 
@@ -287,7 +289,7 @@ export function BottomInsightsCard({
       {/* Header bar — exact Plausible Goals full-width card tabs */}
       <div className="h-[34px] flex items-center justify-between border-b border-zinc-200">
         <div className="flex items-center gap-5 overflow-x-auto no-scrollbar">
-          {tabs.map((tab) => {
+          {tabs.filter(tab => !goalsOnly || tab.id === 'goals').map((tab) => {
             const active = tab.id === activeTab;
             return (
               <button
@@ -312,7 +314,7 @@ export function BottomInsightsCard({
         {/* 1. GOALS (1:1 Plausible red-50 bar style) */}
         {activeTab === 'goals' && (
           <div>
-            <div className="grid grid-cols-[1fr_80px_80px_72px] sm:grid-cols-[1fr_92px_92px_78px] gap-2 pb-1.5 text-[12px] font-medium text-zinc-500">
+            <div className="grid grid-cols-[minmax(0,1fr)_44px_38px_48px] sm:grid-cols-[1fr_92px_92px_78px] gap-2 pb-1.5 text-[12px] font-medium text-zinc-500">
               <span>{t('col.goal')}</span>
               <span className="text-right">{t('col.uniques')}</span>
               <span className="text-right">{t('col.total')}</span>
@@ -338,7 +340,7 @@ export function BottomInsightsCard({
                   return (
                     <div
                       key={g.key}
-                      className="grid grid-cols-[1fr_80px_80px_72px] sm:grid-cols-[1fr_92px_92px_78px] gap-2 items-center h-8"
+                      className="grid grid-cols-[minmax(0,1fr)_44px_38px_48px] sm:grid-cols-[1fr_92px_92px_78px] gap-2 items-center h-8"
                     >
                       <div className="relative h-8 flex items-center px-2 rounded-sm overflow-hidden">
                         <div

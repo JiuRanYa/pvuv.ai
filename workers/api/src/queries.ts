@@ -130,7 +130,7 @@ let partitionCache: { names: string[]; at: number } | null = null;
 const PARTITION_TTL_MS = 60_000;
 
 /** Existing events_YYYYMM tables overlapping a UTC [startTs, endTs) span. */
-async function eventTables(db: D1Database, startTs: number, endTs: number): Promise<string[]> {
+export async function eventTables(db: D1Database, startTs: number, endTs: number): Promise<string[]> {
   const now = Date.now();
   const fresh = partitionCache
     && now - partitionCache.at < PARTITION_TTL_MS

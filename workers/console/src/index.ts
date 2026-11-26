@@ -20,6 +20,7 @@
  */
 
 import { parsePeriod, siteTimezone, overview, sitesSummary, realtime, timeseries, breakdown, quality, alerts, anomalies, funnel, funnelDropoff, traffic, onlineVisitors, visitorsList, visitorProfile, ranking, adguardImpact, edge, vitals, conversionTiming, ApiError, FILTERABLE, type Filter, type FunnelStep } from '../../api/src/queries';
+import { onlineDashboard, onlineFilterDimensions } from '../../api/src/online-dashboard';
 import { parseBotDirectory } from '../../../shared/botdir';
 import { createToken } from '../../../shared/tokens';
 import { verifySession, SESSION_COOKIE } from '../../api/src/auth';
@@ -767,7 +768,8 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
     // period resolved in the site's own timezone (rollups are keyed on it)
     const period = parsePeriod(url.searchParams.get('period'), site.timezone || 'UTC');
     const q = url.searchParams;
-    const filters = parseFilters(q.get('filters'));
+    const filters = parseFilters(q.get('filters'), resource === 'online_dashboard' ? onlineFilterDimensions : FILTERABLE);
+    if (resource === 'online_dashboard') return json(await onlineDashboard(env.DB, siteId, period.now, period.tz, filters));
     if (resource === 'realtime') return json(await realtime(env.DB, siteId, Date.now(), undefined, url.searchParams.get('summary') !== '1'));
     if (resource === 'overview') return json(await overview(env.DB, siteId, period, filters));
     if (resource === 'timeseries') return json(await timeseries(env.DB, siteId, q.get('metric') ?? 'pv', period, q.get('interval') ?? 'day', filters));
@@ -992,13 +994,13 @@ async function resolveFunnelSteps(db: D1Database, siteId: string, q: URLSearchPa
 
 /** Parse the `filters` query param (JSON [{dim,value}]), validated against the
  *  filterable-dim allowlist and capped. Malformed → no filters. */
-function parseFilters(raw: string | null): Filter[] {
+function parseFilters(raw: string | null, dimensions = FILTERABLE): Filter[] {
   if (!raw) return [];
   try {
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
     return arr
-      .filter((f) => f && typeof f.dim === 'string' && typeof f.value === 'string' && FILTERABLE.has(f.dim))
+      .filter((f) => f && typeof f.dim === 'string' && typeof f.value === 'string' && dimensions.has(f.dim))
       .slice(0, 8)
       .map((f) => {
         const values = Array.isArray(f.values)

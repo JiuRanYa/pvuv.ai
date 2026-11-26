@@ -14,12 +14,13 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { api, buildEmbedSnippet, withBase } from '../lib/api';
+import { api, getBasePath, buildEmbedSnippet, withBase } from '../lib/api';
 import type {
   BreakdownRow,
   FilterItem,
   MeResponse,
   OverviewResponse,
+  OnlineDashboardResponse,
   RealtimeResponse,
   SiteRecord,
   TimeseriesPoint,
@@ -34,6 +35,7 @@ import {
 } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { useRouter } from '../lib/router';
+import { ActiveVisitorList } from '../components/ActiveVisitorList';
 import { Navbar } from '../components/Navbar';
 import { Dropdown } from '../components/Dropdown';
 import { Modal } from '../components/Modal';
@@ -45,20 +47,32 @@ import { BottomInsightsCard, type BottomTabId } from '../components/BottomInsigh
 
 export function SiteDashboardPage({ siteId }: { siteId: string }) {
   const { lang, t } = useI18n();
-  const { navigate } = useRouter();
+  const { navigate, search, route } = useRouter();
+  const online = new URLSearchParams(search).get('online') === '1';
+  const setOnline = (enabled: boolean) => {
+    const params = new URLSearchParams(search);
+    if (enabled) params.set('online', '1');
+    else params.delete('online');
+    const pathname = route.name === 'visitors' ? `/sites/${siteId}` : window.location.pathname.slice(getBasePath().length);
+    navigate(pathname + (params.size ? '?' + params : ''));
+  };
 
   const [me, setMe] = useState<MeResponse | null>(null);
   const [sites, setSites] = useState<SiteRecord[]>([]);
   const [period, setPeriod] = useState<string>('today');
   const [interval, setIntervalState] = useState<string>('hour');
   const [activeMetric, setActiveMetric] = useState<MainMetricKey>('uv');
-  const [filters, setFilters] = useState<FilterItem[]>([]);
+  const [historyFilters, setHistoryFilters] = useState<FilterItem[]>([]);
+  const [liveFilters, setLiveFilters] = useState<FilterItem[]>([]);
+  const [filters, setFilters] = online ? [liveFilters, setLiveFilters] as const : [historyFilters, setHistoryFilters] as const;
+  const [snapshot, setSnapshot] = useState<OnlineDashboardResponse | null>(null);
+  const [liveError, setLiveError] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   // Core overview + timeseries + realtime
   const [realtime, setRealtime] = useState<RealtimeResponse | null>(null);
-  const [overview, setOverview] = useState<OverviewResponse | null>(null);
-  const [points, setPoints] = useState<TimeseriesPoint[]>([]);
+  const [historyOverview, setOverview] = useState<OverviewResponse | null>(null);
+  const [historyPoints, setPoints] = useState<TimeseriesPoint[]>([]);
   const [loadingMain, setLoadingMain] = useState(true);
   const [dismissOnboarding, setDismissOnboarding] = useState(false);
 
@@ -68,22 +82,22 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
   const referrerSource = sourceTab === 'source' ? selectedSource : undefined;
   const sourceDimension = referrerSource ? 'referrer' : sourceTab;
   const sourceDetailKey = JSON.stringify([sourceDimension, referrerSource, period, filters]);
-  const [sourceRows, setSourceRows] = useState<BreakdownRow[]>([]);
+  const [historySourceRows, setSourceRows] = useState<BreakdownRow[]>([]);
   const [sourceLoading, setSourceLoading] = useState(false);
 
   const [pageTab, setPageTab] = useState<string>('page');
-  const [pageRows, setPageRows] = useState<BreakdownRow[]>([]);
+  const [historyPageRows, setPageRows] = useState<BreakdownRow[]>([]);
   const [pageLoading, setPageLoading] = useState(false);
 
   const [geoTab, setGeoTab] = useState<string>('map');
-  const [geoRows, setGeoRows] = useState<BreakdownRow[]>([]);
+  const [historyGeoRows, setGeoRows] = useState<BreakdownRow[]>([]);
   const [geoLoading, setGeoLoading] = useState(false);
 
   const [deviceTab, setDeviceTab] = useState<string>('browser');
-  const [deviceRows, setDeviceRows] = useState<BreakdownRow[]>([]);
+  const [historyDeviceRows, setDeviceRows] = useState<BreakdownRow[]>([]);
   const [deviceLoading, setDeviceLoading] = useState(false);
 
-  const [goalRows, setGoalRows] = useState<BreakdownRow[]>([]);
+  const [historyGoalRows, setGoalRows] = useState<BreakdownRow[]>([]);
   const [bottomTab, setBottomTab] = useState<BottomTabId>('goals');
 
   // Top-100 details cache per card
@@ -123,6 +137,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
 
   // Adjust default interval when period changes
   const handlePeriodChange = (p: string) => {
+    if (online) setOnline(false);
     setPeriod(p);
     setIntervalState(defaultIntervalForPeriod(p));
   };
@@ -138,6 +153,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
 
   // Fetch Realtime (poll every 30s)
   useEffect(() => {
+    if (online) return;
     let alive = true;
     const poll = () => {
       api
@@ -153,19 +169,21 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
       alive = false;
       window.clearInterval(timer);
     };
-  }, [siteId]);
+  }, [siteId, online]);
 
   // Fetch Overview + Timeseries + Goals
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
+    if (online) return;
     let current = true;
     api.overview(siteId, period, filters).then(data => { if (current) setOverview(data); })
       .catch(() => { if (current) setOverview(null); });
     api.breakdown(siteId, 'goal', period, 20, filters).then(data => { if (current) setGoalRows(data.rows); })
       .catch(() => { if (current) setGoalRows([]); });
     return () => { current = false; };
-  }, [siteId, period, filtersKey, refresh]);
+  }, [siteId, period, filtersKey, refresh, online]);
   useEffect(() => {
+    if (online) return;
     let current = true;
     setLoadingMain(true);
     api.timeseries(siteId, activeMetric, period, interval, filters)
@@ -173,10 +191,11 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
       .catch(() => { if (current) setPoints([]); })
       .finally(() => { if (current) setLoadingMain(false); });
     return () => { current = false; };
-  }, [siteId, period, activeMetric, interval, filtersKey, refresh]);
+  }, [siteId, period, activeMetric, interval, filtersKey, refresh, online]);
 
   // Fetch Sources Card
   useEffect(() => {
+    if (online) return;
     let alive = true;
     setSourceLoading(true);
     setSourceRows([]);
@@ -194,10 +213,11 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
     return () => {
       alive = false;
     };
-  }, [siteId, sourceDimension, referrerSource, period, filtersKey]);
+  }, [siteId, sourceDimension, referrerSource, period, filtersKey, online]);
 
   // Fetch Pages Card
   useEffect(() => {
+    if (online) return;
     let alive = true;
     setPageLoading(true);
     api
@@ -214,10 +234,11 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
     return () => {
       alive = false;
     };
-  }, [siteId, pageTab, period, filtersKey]);
+  }, [siteId, pageTab, period, filtersKey, online]);
 
   // Fetch Locations Card (MAP uses country dim with limit 200 so choropleth has full coverage)
   useEffect(() => {
+    if (online) return;
     let alive = true;
     setGeoLoading(true);
     const dim = geoTab === 'map' ? 'country' : geoTab;
@@ -236,10 +257,11 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
     return () => {
       alive = false;
     };
-  }, [siteId, geoTab, period, filtersKey]);
+  }, [siteId, geoTab, period, filtersKey, online]);
 
   // Fetch Devices Card
   useEffect(() => {
+    if (online) return;
     let alive = true;
     setDeviceLoading(true);
     api
@@ -256,9 +278,39 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
     return () => {
       alive = false;
     };
-  }, [siteId, deviceTab, period, filtersKey]);
+  }, [siteId, deviceTab, period, filtersKey, online]);
+
+  useEffect(() => {
+    if (!online) return;
+    let active = true;
+    let timer: number;
+    setSnapshot(null);
+    setLiveError(false);
+    const poll = async () => {
+      try {
+        const result = await api.onlineDashboard(siteId, filters);
+        if (active) { setSnapshot(result); setLiveError(false); }
+      } catch {
+        if (active) setLiveError(true);
+      } finally {
+        if (active) timer = window.setTimeout(poll, 30_000);
+      }
+    };
+    void poll();
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [online, siteId, filtersKey, refresh]);
+
+  const liveRows = (dim: string) => snapshot?.breakdown[dim] ?? [];
+  const overview = online ? snapshot?.overview ?? null : historyOverview;
+  const points = online ? snapshot?.series.map(p => ({label: p.label, status: p.status, value: p.metrics[activeMetric]})) ?? [] : historyPoints;
+  const sourceRows = online ? liveRows(sourceDimension).slice(0,15) : historySourceRows;
+  const pageRows = online ? liveRows(pageTab).slice(0,15) : historyPageRows;
+  const geoRows = online ? liveRows(geoTab === 'map' ? 'country' : geoTab).slice(0,geoTab === 'map' ? 250 : 15) : historyGeoRows;
+  const deviceRows = online ? liveRows(deviceTab).slice(0,15) : historyDeviceRows;
+  const goalRows = online ? snapshot?.goals ?? [] : historyGoalRows;
 
   const loadDetails = async (cardKey: string, dim: string, key?: string) => {
+    if (online) return;
     setDetailLoading((p) => ({ ...p, [cardKey]: true }));
     try {
       const res = await api.breakdown(siteId, dim, period, 100, filters, key);
@@ -293,7 +345,8 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
   const handleExportJson = () => {
     const payload = {
       site: currentSite?.name ?? siteId,
-      period,
+      period: online ? '30m' : period,
+      ...(online && snapshot ? {as_of: snapshot.as_of} : {}),
       filters,
       overview,
       timeseries: points,
@@ -307,7 +360,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `tally-${siteId}-${period}.json`;
+    a.download = `tally-${siteId}-${online ? '30m' : period}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -328,7 +381,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
   };
 
   const showOnboarding =
-    !dismissOnboarding &&
+    !online && !dismissOnboarding &&
     currentSite &&
     !currentSite.has_data &&
     overview !== null &&
@@ -351,7 +404,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
             : 'bg-[#fafafa]'
         }`}
       >
-        <div className="max-w-[1120px] mx-auto px-4 h-12 flex items-center justify-between gap-3">
+        <div className="max-w-[1120px] mx-auto px-3 sm:px-4 h-12 flex items-center justify-between gap-1 sm:gap-3">
           {/* Left: Site Switcher + Live Visitors Indicator */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Dropdown
@@ -377,7 +430,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
               trigger={() => (
                 <button
                   type="button"
-                  className="h-8 px-1.5 -ml-1.5 rounded-md inline-flex items-center gap-2 text-[14.5px] font-semibold text-zinc-900 hover:bg-zinc-200/60 transition-colors cursor-pointer min-w-0"
+                  className="h-8 px-1.5 -ml-1.5 rounded-md inline-flex items-center gap-2 text-[14.5px] font-semibold text-zinc-900 hover:bg-zinc-200/60 transition-colors cursor-pointer min-w-0 max-w-full"
                 >
                   <SiteBadgeIcon siteId={siteId} name={currentSite?.name || 'T'} size={22} />
                   <span className="truncate max-w-[22vw] sm:max-w-[240px]">
@@ -390,12 +443,16 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
 
             <button
               type="button"
-              onClick={() => navigate(`/sites/${siteId}/visitors?online=1`)}
-              className="h-8 px-2 rounded-md inline-flex items-center gap-1.5 text-[13px] text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50 transition-colors cursor-pointer whitespace-nowrap"
+              aria-pressed={online}
+              onClick={() => {
+                if (!online) setLiveFilters([...historyFilters]);
+                setOnline(!online);
+              }}
+              className={`h-8 shrink-0 px-2 rounded-md inline-flex items-center gap-1.5 text-[13px] cursor-pointer whitespace-nowrap ${online ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200' : 'text-zinc-500 hover:bg-zinc-200/50'}`}
             >
               <span className="w-2 h-2 rounded-full bg-[#10b981] rt-dot shrink-0" />
               <span className="tabular-nums">
-                {realtime?.online ?? '–'} <span className="max-sm:sr-only">{t('kpi.current_visitors')}</span>
+                {(online ? snapshot?.overview.uv : realtime?.online) ?? '–'} <span className="max-sm:sr-only">{t('kpi.current_visitors')}</span>
               </span>
             </button>
           </div>
@@ -424,7 +481,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
             <Dropdown
               align="right"
               widthClass="min-w-[168px]"
-              value={period}
+              value={online ? '30m' : period}
               onSelect={handlePeriodChange}
               options={PERIOD_OPTIONS.map((p) => ({ value: p, label: t(`period.${p}`) }))}
               trigger={() => (
@@ -433,7 +490,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                   className="h-8 px-2.5 rounded-md inline-flex items-center gap-1.5 text-[13.5px] font-medium text-zinc-700 hover:bg-zinc-200/60 transition-colors cursor-pointer"
                 >
                   <Calendar className="w-4 h-4 text-zinc-500" />
-                  <span>{t(`period.${period}`)}</span>
+                  <span>{online ? (lang === 'zh' ? '最近 30 分钟' : 'Last 30 min') : t(`period.${period}`)}</span>
                 </button>
               )}
             />
@@ -448,7 +505,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                 { value: 'quality', label: t('tab.quality'), icon: <Shield className="w-3.5 h-3.5 text-zinc-400" />, dividerBefore: true },
                 { value: 'adguard', label: t('tab.adguard'), icon: <Shield className="w-3.5 h-3.5 text-zinc-400" /> },
                 { value: 'export', label: t('toolbar.export'), icon: <Download className="w-3.5 h-3.5 text-zinc-400" />, dividerBefore: true },
-              ]}
+              ].filter(item => !online || !['quality','adguard'].includes(item.value))}
               onSelect={(v) => {
                 if (v === 'embed') {
                   setCopied(false);
@@ -457,7 +514,8 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                   setCopied(false);
                   setShareOpen(true);
                 } else if (v === 'visitors') {
-                  navigate(`/sites/${siteId}/visitors?period=${encodeURIComponent(period)}`);
+                  if (online) document.getElementById('active-visitors')?.scrollIntoView({ behavior: 'smooth' });
+                  else navigate(`/sites/${siteId}/visitors?period=${encodeURIComponent(period)}`);
                 } else if (v === 'quality') {
                   jumpToBottomTab('quality');
                 } else if (v === 'adguard') {
@@ -521,6 +579,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
           </div>
         )}
 
+        {online && liveError && <p role="alert" className="mb-3 text-sm text-amber-700">{lang === 'zh' ? '实时数据刷新失败，正在重试。' : 'Live refresh failed. Retrying shortly.'}</p>}
         {showOnboarding && currentSite ? (
           <section className="plausible-card p-8 max-w-2xl mx-auto mt-6">
             <div className="flex items-center gap-2 text-indigo-600 text-[12px] font-semibold uppercase tracking-wide">
@@ -573,10 +632,10 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
               points={points}
               activeMetric={activeMetric}
               onSelectMetric={setActiveMetric}
-              interval={interval}
+              interval={online ? '5min' : interval}
               onSelectInterval={setIntervalState}
-              allowedIntervals={allowedIntervals}
-              loading={loadingMain}
+              allowedIntervals={online ? [] : allowedIntervals}
+              loading={online ? !snapshot && !liveError : loadingMain}
             />
 
             {/* 2. Breakdown Row 1: Sources (Blue) & Top Pages (Orange) */}
@@ -612,7 +671,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                 }
                 rightColLabel={t('col.visitors')}
                 rows={sourceRows}
-                loading={sourceLoading}
+                loading={online ? !snapshot && !liveError : sourceLoading}
                 getRowKey={(r) => r.key || '(direct)'}
                 getRowLabel={(r) =>
                   referrerSource
@@ -640,8 +699,8 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                   }
                 }}
                 onOpenDetails={() => void loadDetails(sourceDetailKey, sourceDimension, referrerSource)}
-                detailRows={detailRows[sourceDetailKey]}
-                detailLoading={detailLoading[sourceDetailKey]}
+                detailRows={online ? liveRows(sourceDimension) : detailRows[sourceDetailKey]}
+                detailLoading={!online && detailLoading[sourceDetailKey]}
               />
 
               <BreakdownCard
@@ -656,17 +715,17 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                 leftColLabel={t('col.page')}
                 rightColLabel={t('col.visitors')}
                 rows={pageRows}
-                loading={pageLoading}
+                loading={online ? !snapshot && !liveError : pageLoading}
                 getRowKey={(r) => r.path || r.key || '/'}
                 getRowLabel={(r) => r.path || r.key || '/'}
                 getRowValue={(r) => r.uv || r.sessions || r.pv || 0}
                 onRowClick={(r) => {
                   const p = r.path || r.key;
-                  if (p && p !== '(unknown)') addFilter('page', p);
+                  if (p && p !== '(unknown)') addFilter(online ? pageTab : 'page', p);
                 }}
                 onOpenDetails={() => void loadDetails('page', pageTab)}
-                detailRows={detailRows.page}
-                detailLoading={detailLoading.page}
+                detailRows={online ? liveRows(pageTab) : detailRows.page}
+                detailLoading={!online && detailLoading.page}
               />
             </div>
 
@@ -691,7 +750,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                 }
                 rightColLabel={t('col.visitors')}
                 rows={geoRows}
-                loading={geoLoading}
+                loading={online ? !snapshot && !liveError : geoLoading}
                 getRowKey={(r) => r.key || '(unknown)'}
                 getRowLabel={(r) =>
                   geoTab === 'country' || geoTab === 'map'
@@ -717,8 +776,8 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                   ) : undefined
                 }
                 onOpenDetails={() => void loadDetails('geo', geoTab === 'map' ? 'country' : geoTab)}
-                detailRows={detailRows.geo}
-                detailLoading={detailLoading.geo}
+                detailRows={online ? liveRows(geoTab === 'map' ? 'country' : geoTab) : detailRows.geo}
+                detailLoading={!online && detailLoading.geo}
               />
 
               <BreakdownCard
@@ -739,7 +798,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                 }
                 rightColLabel={t('col.visitors')}
                 rows={deviceRows}
-                loading={deviceLoading}
+                loading={online ? !snapshot && !liveError : deviceLoading}
                 getRowKey={(r) => r.key || '(unknown)'}
                 getRowLabel={(r) => r.key || '(unknown)'}
                 getRowValue={(r) => r.uv || r.pv || 0}
@@ -754,8 +813,8 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                   if (r.key) addFilter(deviceTab, r.key);
                 }}
                 onOpenDetails={() => void loadDetails('device', deviceTab)}
-                detailRows={detailRows.device}
-                detailLoading={detailLoading.device}
+                detailRows={online ? liveRows(deviceTab) : detailRows.device}
+                detailLoading={!online && detailLoading.device}
               />
             </div>
 
@@ -767,11 +826,13 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                 filters={filters}
                 overview={overview}
                 goals={goalRows}
-                activeTab={bottomTab}
+                goalsOnly={online}
+                activeTab={online ? 'goals' : bottomTab}
                 onTabChange={setBottomTab}
                 onSiteUpdated={() => void loadSitesAndMe()}
               />
             )}
+            {online && snapshot && <ActiveVisitorList siteId={siteId} visitors={snapshot.visitors} online={snapshot.overview.uv}/>}
           </>
         )}
       </main>

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
-import type { OverviewResponse, TimeseriesPoint } from '../lib/types';
+import type { DashboardMetrics, TimeseriesPoint } from '../lib/types';
 import { fmtBucketLabel, fmtCompact, fmtDecimal, fmtDuration, fmtNumber, fmtPct } from '../lib/format';
 import { useI18n } from '../lib/i18n';
 import { Dropdown } from './Dropdown';
@@ -29,7 +29,7 @@ export function StatsGraphCard({
   allowedIntervals,
   loading,
 }: {
-  overview: OverviewResponse | null;
+  overview: Omit<DashboardMetrics, 'pv_per_visitor'> | null;
   points: TimeseriesPoint[];
   activeMetric: MainMetricKey;
   onSelectMetric: (m: MainMetricKey) => void;

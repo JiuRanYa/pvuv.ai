@@ -315,6 +315,18 @@ export interface VisitorListRow {
   last_ts: number;
 }
 
+export type DashboardMetrics = Pick<OverviewResponse, 'uv' | 'pv' | 'sessions' | 'bounce_rate' | 'bounce_rate_single' | 'avg_duration_ms' | 'visit_duration_ms'> & { pv_per_visitor: number };
+
+export interface OnlineDashboardResponse {
+  window_minutes: number;
+  as_of: number;
+  overview: DashboardMetrics;
+  series: Array<{ label: string; status: string; metrics: DashboardMetrics }>;
+  breakdown: Record<string, BreakdownRow[]>;
+  goals: BreakdownRow[];
+  visitors: OnlineVisitorsResponse['visitors'];
+}
+
 export interface OnlineVisitorsResponse {
   window_minutes: number;
   online: number;

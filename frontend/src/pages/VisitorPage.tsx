@@ -76,7 +76,7 @@ export function VisitorPage({ siteId, vid }: { siteId: string; vid?: string }) {
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1 pb-5">
           <div className="flex items-center gap-3">
             <Link
-              to={vid ? `${listPath}?${fromOnline ? 'online=1' : 'period=' + period}` : `/sites/${siteId}`}
+              to={vid ? (fromOnline ? `/sites/${siteId}?online=1` : `${listPath}?period=${period}`) : `/sites/${siteId}`}
               className="h-8 px-2.5 rounded-md inline-flex items-center gap-1.5 text-[13px] font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60"
             >
               <ArrowLeft className="w-4 h-4" />
