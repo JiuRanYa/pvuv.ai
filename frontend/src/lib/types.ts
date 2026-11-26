@@ -150,7 +150,7 @@ export interface QualityResponse {
 }
 
 export interface AlertItem {
-  code: string;
+  id: string;
   severity: 'warn' | 'high' | 'info' | string;
   title?: string;
   detail?: string;
@@ -267,8 +267,6 @@ export interface FunnelResultStep {
   type: 'page' | 'event';
   value: string;
   visitors: number;
-  conv_from_prev: number | null;
-  conv_from_first: number | null;
   dropoff?: number;
   median_ms?: number | null;
 }
@@ -306,6 +304,7 @@ export interface RankingSite {
 
 export interface VisitorListRow {
   visitor_id: string;
+  source: string;
   country: string | null;
   device_type: string | null;
   browser?: string | null;
@@ -316,6 +315,13 @@ export interface VisitorListRow {
   last_ts: number;
 }
 
+export interface OnlineVisitorsResponse {
+  window_minutes: number;
+  online: number;
+  sources: Array<{ source: string; visitors: number }>;
+  visitors: Array<{ visitor_id: string; source: string; path: string | null; last_ts: number }>;
+}
+
 export interface VisitorProfileResponse {
   profile: Record<string, unknown> | null;
   sessions: Array<Record<string, unknown>>;
@@ -324,9 +330,9 @@ export interface VisitorProfileResponse {
 }
 
 export interface DiagnosticCheck {
-  id: string;
-  name: string;
-  status: 'pass' | 'warn' | 'fail';
+  key: string;
+  label: string;
+  status: 'ok' | 'warn' | 'fail';
   detail?: string;
 }
 

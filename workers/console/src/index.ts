@@ -19,7 +19,7 @@
  * reuse the api worker's query layer against the same D1.
  */
 
-import { parsePeriod, siteTimezone, overview, sitesSummary, realtime, timeseries, breakdown, quality, alerts, anomalies, funnel, funnelDropoff, traffic, visitorsList, visitorProfile, ranking, adguardImpact, edge, vitals, conversionTiming, ApiError, FILTERABLE, type Filter, type FunnelStep } from '../../api/src/queries';
+import { parsePeriod, siteTimezone, overview, sitesSummary, realtime, timeseries, breakdown, quality, alerts, anomalies, funnel, funnelDropoff, traffic, onlineVisitors, visitorsList, visitorProfile, ranking, adguardImpact, edge, vitals, conversionTiming, ApiError, FILTERABLE, type Filter, type FunnelStep } from '../../api/src/queries';
 import { parseBotDirectory } from '../../../shared/botdir';
 import { createToken } from '../../../shared/tokens';
 import { verifySession, SESSION_COOKIE } from '../../api/src/auth';
@@ -768,7 +768,7 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
     const period = parsePeriod(url.searchParams.get('period'), site.timezone || 'UTC');
     const q = url.searchParams;
     const filters = parseFilters(q.get('filters'));
-    if (resource === 'realtime') return json(await realtime(env.DB, siteId, Date.now(), 30, url.searchParams.get('summary') !== '1'));
+    if (resource === 'realtime') return json(await realtime(env.DB, siteId, Date.now(), undefined, url.searchParams.get('summary') !== '1'));
     if (resource === 'overview') return json(await overview(env.DB, siteId, period, filters));
     if (resource === 'timeseries') return json(await timeseries(env.DB, siteId, q.get('metric') ?? 'pv', period, q.get('interval') ?? 'day', filters));
     if (resource === 'breakdown') {
@@ -797,6 +797,7 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
       }, filters));
     }
     if (resource === 'visitors' && !subId) {
+      if (q.get('online') === '1') return json(await onlineVisitors(env.DB, siteId, Date.now()));
       return json(await visitorsList(env.DB, siteId, period, {
         path: q.get('path'),
         verdict: q.get('verdict'),

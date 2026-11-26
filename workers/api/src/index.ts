@@ -19,7 +19,7 @@
  * session cookie and can only read their own sites.
  */
 
-import { parsePeriod, siteTimezone, overview, sitesSummary, realtime, timeseries, breakdown, quality, alerts, anomalies, funnel, funnelDropoff, traffic, visitorsList, visitorProfile, ranking, adguardImpact, edge, vitals, conversionTiming, ApiError, FILTERABLE, type Filter, type FunnelStep } from './queries';
+import { parsePeriod, siteTimezone, overview, sitesSummary, realtime, timeseries, breakdown, quality, alerts, anomalies, funnel, funnelDropoff, traffic, onlineVisitors, visitorsList, visitorProfile, ranking, adguardImpact, edge, vitals, conversionTiming, ApiError, FILTERABLE, type Filter, type FunnelStep } from './queries';
 import { verifySession } from './auth';
 import { bearerFrom, hashToken, looksLikeApiToken } from '../../../shared/tokens';
 import { hmacSign } from '../../../shared/ids';
@@ -150,6 +150,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     }, filters));
   }
   if (resource === 'visitors' && !subId) {
+    if (q.get('online') === '1') return json(await onlineVisitors(env.DB, siteId, Date.now()));
     return json(await visitorsList(env.DB, siteId, period, {
       path: q.get('path'),
       verdict: q.get('verdict'),

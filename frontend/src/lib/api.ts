@@ -15,6 +15,7 @@ import type {
   HomeSettings,
   MeResponse,
   OverviewResponse,
+  OnlineVisitorsResponse,
   QualityResponse,
   RankingSite,
   RealtimeResponse,
@@ -170,6 +171,7 @@ export const api = {
 
   // Per-site analytics
   realtime: (siteId: string) => apiFetch<RealtimeResponse>(`/api/sites/${siteId}/realtime?summary=1`),
+  onlineVisitors: (siteId: string) => apiFetch<OnlineVisitorsResponse>(`/api/sites/${siteId}/visitors?online=1`),
   overview: (siteId: string, period: string, filters: FilterItem[] = []) =>
     apiFetch<OverviewResponse>(`/api/sites/${siteId}/overview${qs({ period, filters: serializeFilters(filters) })}`),
   timeseries: (siteId: string, metric: string, period: string, interval: string, filters: FilterItem[] = []) =>

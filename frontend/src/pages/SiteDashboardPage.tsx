@@ -390,7 +390,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
 
             <button
               type="button"
-              onClick={() => handlePeriodChange('today')}
+              onClick={() => navigate(`/sites/${siteId}/visitors?online=1`)}
               className="h-8 px-2 rounded-md inline-flex items-center gap-1.5 text-[13px] text-zinc-500 hover:text-zinc-800 hover:bg-zinc-200/50 transition-colors cursor-pointer whitespace-nowrap"
             >
               <span className="w-2 h-2 rounded-full bg-[#10b981] rt-dot shrink-0" />
@@ -457,7 +457,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                   setCopied(false);
                   setShareOpen(true);
                 } else if (v === 'visitors') {
-                  navigate(`/sites/${siteId}/visitors`);
+                  navigate(`/sites/${siteId}/visitors?period=${encodeURIComponent(period)}`);
                 } else if (v === 'quality') {
                   jumpToBottomTab('quality');
                 } else if (v === 'adguard') {

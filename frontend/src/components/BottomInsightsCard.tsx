@@ -498,8 +498,8 @@ export function BottomInsightsCard({
             {funnelResult && funnelResult.steps?.length > 0 ? (
               <div className="space-y-2 pt-1">
                 {funnelResult.steps.map((st, idx) => {
-                  const first = funnelResult.steps[0]?.visitors || 1;
-                  const pct = Math.max((st.visitors / first) * 100, st.visitors > 0 ? 2 : 0);
+                  const first = funnelResult.steps[0].visitors;
+                  const pct = first ? (st.visitors / first) * 100 : 0;
                   return (
                     <div key={idx} className="grid grid-cols-[1fr_90px_88px] gap-3 items-center">
                       <div className="relative h-9 flex items-center px-3 rounded-sm bg-zinc-50 overflow-hidden">
@@ -516,7 +516,7 @@ export function BottomInsightsCard({
                         {fmtNumber(st.visitors)}
                       </span>
                       <span className="text-right text-[12.5px] font-medium text-zinc-600 tabular-nums">
-                        {idx === 0 ? '100%' : fmtPct(st.conv_from_first, 1)}
+                        {first ? fmtPct(st.visitors / first, 1) : '—'}
                       </span>
                     </div>
                   );
@@ -640,7 +640,7 @@ export function BottomInsightsCard({
                       >
                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                         <div>
-                          <div className="font-medium">{al.title || al.code}</div>
+                          <div className="font-medium">{al.title || al.id}</div>
                           {al.detail && <div className="text-[12px] text-amber-800/80 mt-0.5">{al.detail}</div>}
                         </div>
                       </div>
@@ -882,7 +882,7 @@ export function BottomInsightsCard({
                 ))}
               </div>
               <Link
-                to={`/sites/${site.site_id}/visitors`}
+                to={`/sites/${site.site_id}/visitors?period=${encodeURIComponent(period)}`}
                 className="text-[12.5px] font-medium text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1"
               >
                 <span>{t('toolbar.visitors')}</span>
@@ -910,7 +910,7 @@ export function BottomInsightsCard({
                       <tr key={r.visitor_id} className="hover:bg-zinc-50">
                         <td className="py-2 pr-3 font-mono text-[12px]">
                           <Link
-                            to={`/sites/${site.site_id}/visitors/${encodeURIComponent(r.visitor_id)}`}
+                            to={`/sites/${site.site_id}/visitors/${encodeURIComponent(r.visitor_id)}?period=${encodeURIComponent(period)}`}
                             className="text-indigo-600 hover:underline"
                           >
                             {r.visitor_id.slice(0, 14)}…

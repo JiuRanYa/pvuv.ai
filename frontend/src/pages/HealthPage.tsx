@@ -15,6 +15,7 @@ export function HealthPage() {
   const { lang, t } = useI18n();
   const [checks, setChecks] = useState<DiagnosticCheck[]>([]);
   const [loading, setLoading] = useState(true);
+  const [checksFailed, setChecksFailed] = useState(false);
   const [testing, setTesting] = useState(false);
   const [liveSteps, setLiveSteps] = useState<LiveStep[]>([]);
 
@@ -23,6 +24,9 @@ export function HealthPage() {
     try {
       const res = await api.diagnostics();
       setChecks(res.checks ?? []);
+      setChecksFailed(false);
+    } catch {
+      setChecksFailed(true);
     } finally {
       setLoading(false);
     }
@@ -142,10 +146,11 @@ export function HealthPage() {
             {lang === 'zh' ? '服务端核心检查' : 'Server Configuration Checks'}
           </h2>
           <div className="divide-y divide-zinc-100 mt-1">
+            {checksFailed && <p role="alert" className="py-2 text-sm text-amber-700">{lang === 'zh' ? '检查加载失败，请点击刷新重试。' : 'Checks failed to load. Refresh to retry.'}</p>}
             {checks.map((c) => (
-              <div key={c.id} className="py-3 flex items-start justify-between gap-4">
+              <div key={c.key} className="py-3 flex items-start justify-between gap-4">
                 <div className="flex items-start gap-2.5">
-                  {c.status === 'pass' ? (
+                  {c.status === 'ok' ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
                   ) : c.status === 'warn' ? (
                     <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
@@ -153,13 +158,13 @@ export function HealthPage() {
                     <XCircle className="w-4 h-4 text-rose-500 mt-0.5 shrink-0" />
                   )}
                   <div>
-                    <div className="text-[13.5px] font-medium text-zinc-900">{c.name}</div>
+                    <div className="text-[13.5px] font-medium text-zinc-900">{c.label}</div>
                     {c.detail && <div className="text-[12.5px] text-zinc-500 mt-0.5">{c.detail}</div>}
                   </div>
                 </div>
                 <span
                   className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase shrink-0 ${
-                    c.status === 'pass'
+                    c.status === 'ok'
                       ? 'bg-emerald-50 text-emerald-700'
                       : c.status === 'warn'
                         ? 'bg-amber-50 text-amber-700'

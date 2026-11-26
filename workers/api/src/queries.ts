@@ -494,9 +494,42 @@ export async function overview(db: D1Database, siteId: string, period: Period, f
 // GET /sites/:id/realtime — visitors active in the last N minutes (live)
 // ---------------------------------------------------------------------------
 
+export const REALTIME_WINDOW_MINUTES = 30;
+
+/** Attribute each active visitor to the session of their latest eligible event. */
+export async function onlineVisitors(db: D1Database, siteId: string, now: number) {
+  const startTs = now - REALTIME_WINDOW_MINUTES * 60_000;
+  const tables = await eventTables(db, startTs, now + 1);
+  const recentLimit = 60;
+  const sources: { source: string; visitors: number }[] = [];
+  const visitors: { visitor_id: string; source: string; path: string | null; last_ts: number }[] = [];
+  if (tables.length) {
+    const u = unionOver(tables, 'visitor_id, session_id, ts, path, utm_source, ref_domain', siteId, startTs, now + 1,
+      "visitor_id IS NOT NULL AND verdict NOT IN ('bot','crawler')");
+    const result = await db.prepare(`
+      WITH ranked AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY visitor_id ORDER BY ts DESC, session_id DESC, path DESC) AS rn
+        FROM (${u.sql})
+      ), active AS MATERIALIZED (
+        SELECT r.visitor_id, r.ts, r.path, CASE WHEN s.session_id IS NULL THEN COALESCE(r.utm_source,r.ref_domain,'(unknown)')
+          ELSE COALESCE(s.source,'(direct)') END AS source
+        FROM ranked r LEFT JOIN sessions s ON s.site_id = ? AND s.session_id = r.session_id WHERE r.rn = 1
+      ), recent AS (SELECT * FROM active ORDER BY ts DESC, visitor_id LIMIT ?)
+      SELECT source, COUNT(*) AS n, NULL AS visitor_id, NULL AS ts, NULL AS path FROM active GROUP BY source
+      UNION ALL SELECT source, NULL, visitor_id, ts, path FROM recent
+      ORDER BY n DESC, ts DESC, source, visitor_id
+    `).bind(...u.binds, siteId, recentLimit).all<{ source: string; n: number | null; visitor_id: string; ts: number; path: string | null }>();
+    for (const r of result.results) {
+      if (r.n !== null) sources.push({ source: r.source, visitors: r.n });
+      else visitors.push({ visitor_id: r.visitor_id, source: r.source, last_ts: r.ts, path: r.path });
+    }
+  }
+  return { window_minutes: REALTIME_WINDOW_MINUTES, online: sources.reduce((n, row) => n + row.visitors, 0), sources, visitors };
+}
+
 /** Distinct human visitors + pageviews in the last `windowMin` minutes, with a
  *  per-minute pageview sparkline. Always live (independent of the period). */
-export async function realtime(db: D1Database, siteId: string, now: number, windowMin = 30, includeMinutes = true) {
+export async function realtime(db: D1Database, siteId: string, now: number, windowMin = REALTIME_WINDOW_MINUTES, includeMinutes = true) {
   const startTs = now - windowMin * 60_000;
   const empty = { window_minutes: windowMin, online: 0, pageviews: 0, minutes: includeMinutes ? new Array(windowMin).fill(0) : [] };
   const tables = await eventTables(db, startTs, now + 1);
@@ -1642,7 +1675,7 @@ export async function traffic(
   // same visitor across months in the isolate.
   const flagsOr = ALL_FLAGS.map((n) => `MAX(bot_flags & ${FLAG[n]})`).join(' + ');
   type V = {
-    visitor_id: string; events: number; sessions: number; bot_score: number;
+    visitor_id: string; pv: number; events: number; sessions: number; bot_score: number;
     flags_or: number; verdict_rank: number; last_ts: number; first_ts: number;
     country: string | null; browser: string | null; os: string | null; asn_type: string | null; path: string | null;
   };
@@ -1650,7 +1683,7 @@ export async function traffic(
   for (const table of await eventTables(db, period.startTs, period.endTs)) {
     const rows = await db.prepare(`
       SELECT visitor_id,
-        COUNT(*) AS events,
+        SUM(event = 'pageview') AS pv, COUNT(*) AS events,
         COUNT(DISTINCT session_id) AS sessions,
         MAX(bot_score) AS bot_score,
         (${flagsOr}) AS flags_or,
@@ -1664,7 +1697,7 @@ export async function traffic(
     for (const r of rows.results) {
       const p = acc.get(r.visitor_id);
       if (!p) { acc.set(r.visitor_id, r); continue; }
-      p.events += r.events; p.sessions += r.sessions;
+      p.pv += r.pv; p.events += r.events; p.sessions += r.sessions;
       p.bot_score = Math.max(p.bot_score, r.bot_score);
       p.flags_or |= r.flags_or;
       p.verdict_rank = Math.max(p.verdict_rank, r.verdict_rank);
@@ -1677,7 +1710,7 @@ export async function traffic(
     .sort((a, b) => b.bot_score - a.bot_score || b.last_ts - a.last_ts)
     .slice(0, limit)
     .map((v) => ({
-      visitor_id: v.visitor_id, events: v.events, sessions: v.sessions,
+      visitor_id: v.visitor_id, pv: v.pv, events: v.events, sessions: v.sessions,
       bot_score: v.bot_score, bot_flags: v.flags_or, verdict: VERDICT_BY_RANK[v.verdict_rank] ?? 'clean',
       last_ts: v.last_ts, first_ts: v.first_ts,
       country: v.country, browser: v.browser, os: v.os, asn_type: v.asn_type, path: v.path,
@@ -1723,7 +1756,8 @@ export async function visitorsList(
   const binds = tables.flatMap(() => [siteId, period.startTs, period.endTs, ...pathBinds]);
 
   const rows = await db.prepare(`
-    SELECT visitor_id,
+    WITH listed AS (SELECT visitor_id,
+      SUBSTR(MAX(printf('%016d', ts) || session_id), 17) AS latest_session_id,
       COALESCE(SUM(event = 'pageview'), 0) AS pv,
       COUNT(DISTINCT session_id) AS sessions,
       MIN(ts) AS first_ts, MAX(ts) AS last_ts,
@@ -1734,8 +1768,13 @@ export async function visitorsList(
     FROM (${parts.join(' UNION ALL ')})
     GROUP BY visitor_id
     HAVING pv > 0${verdictCond}
-    ORDER BY last_ts DESC LIMIT ?
-  `).bind(...binds, ...verdictBinds, limit).all<Record<string, unknown> & { vrank: number }>();
+    ORDER BY last_ts DESC, visitor_id LIMIT ?)
+    SELECT listed.visitor_id, listed.pv, listed.sessions, first_ts, last_ts, vrank, listed.country,
+      listed.device_type, browser, os, goals, CASE WHEN s.session_id IS NULL THEN '(unknown)'
+      ELSE COALESCE(s.source,'(direct)') END AS source
+    FROM listed LEFT JOIN sessions s ON s.site_id = ? AND s.session_id = listed.latest_session_id
+    ORDER BY last_ts DESC, listed.visitor_id
+  `).bind(...binds, ...verdictBinds, limit, siteId).all<Record<string, unknown> & { vrank: number }>();
 
   return {
     path: opts.path ?? null,
@@ -1757,9 +1796,9 @@ export async function visitorProfile(db: D1Database, siteId: string, vid: string
 
   const sessions = await db.prepare(`
     SELECT session_id, entry_page, exit_page, pageviews, duration_ms, had_interaction, had_pointer,
-           is_bounce, source, medium, campaign, bot_score, verdict, started_at, last_active_at
-    FROM sessions WHERE site_id = ? AND visitor_id = ? ORDER BY started_at DESC LIMIT 50
-  `).bind(siteId, vid).all();
+           is_bounce, source, channel, referrer, medium, campaign, bot_score, verdict, started_at, last_active_at
+    FROM sessions WHERE site_id = ? AND visitor_id = ? AND started_at < ? AND last_active_at >= ? ORDER BY started_at DESC LIMIT 50
+  `).bind(siteId, vid, period.endTs, period.startTs).all();
 
   // session_id groups the timeline; hostname disambiguates multi-domain sites;
   // props carries custom-event payloads (e.g. revenue) for display.
@@ -1773,12 +1812,12 @@ export async function visitorProfile(db: D1Database, siteId: string, vid: string
   for (const table of (await eventTables(db, period.startTs, period.endTs)).reverse()) {
     if (events.length >= PROFILE_EVENTS_MAX) break;
     const sql = (cols: string) =>
-      `SELECT ${cols} FROM ${table} WHERE site_id = ? AND visitor_id = ? ORDER BY ts DESC LIMIT ?`;
+      `SELECT ${cols} FROM ${table} WHERE site_id = ? AND visitor_id = ? AND ts >= ? AND ts < ? ORDER BY ts DESC LIMIT ?`;
     let rows;
     try {
-      rows = await db.prepare(sql(`${BASE_COLS}, err_count, rage_count, dead_count`)).bind(siteId, vid, PROFILE_EVENTS_MAX - events.length).all();
+      rows = await db.prepare(sql(`${BASE_COLS}, err_count, rage_count, dead_count`)).bind(siteId, vid, period.startTs, period.endTs, PROFILE_EVENTS_MAX - events.length).all();
     } catch {
-      rows = await db.prepare(sql(BASE_COLS)).bind(siteId, vid, PROFILE_EVENTS_MAX - events.length).all();
+      rows = await db.prepare(sql(BASE_COLS)).bind(siteId, vid, period.startTs, period.endTs, PROFILE_EVENTS_MAX - events.length).all();
     }
     events.push(...rows.results);
   }
@@ -1788,8 +1827,8 @@ export async function visitorProfile(db: D1Database, siteId: string, vid: string
   for (const table of (await eventTables(db, period.startTs, period.endTs)).reverse()) {
     context = await db.prepare(`
       SELECT country, region, city, device_type, browser, os, screen_w, screen_h, lang, asn_type
-      FROM ${table} WHERE site_id = ? AND visitor_id = ? AND event = 'pageview' ORDER BY ts DESC LIMIT 1
-    `).bind(siteId, vid).first<Record<string, unknown>>();
+      FROM ${table} WHERE site_id = ? AND visitor_id = ? AND ts >= ? AND ts < ? AND event = 'pageview' ORDER BY ts DESC LIMIT 1
+    `).bind(siteId, vid, period.startTs, period.endTs).first<Record<string, unknown>>();
     if (context) break;
   }
 

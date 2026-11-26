@@ -68,7 +68,7 @@ that is signed in to the console can call it directly for that owner's sites.
 | `GET /v1/sites/{id}/funnels` | saved funnels: `{funnels:[{funnel_id, name, steps, created_at, updated_at}]}` | — |
 | `GET /v1/sites/{id}/funnel` | conversion funnel | `steps` or `funnel_id`, `breakdown`, `period` `filters` |
 | `GET /v1/sites/{id}/funnel_dropoff` | the visitors who reached step `step` but not the next one | `steps` or `funnel_id`, `step` (default 0), `limit` (default 50), `period` `filters` |
-| `GET /v1/sites/{id}/visitors` | visitor list | `period` `path` `verdict` `limit` (default 50) |
+| `GET /v1/sites/{id}/visitors` | visitor list with session sources. With `online=1`, returns the last 30 minutes of active visitors, totals by source, and the latest 60 visitors | `period` `path` `verdict` `limit` (default 50) |
 | `GET /v1/sites/{id}/visitors/{vid}/profile` | one visitor's journey | `period` |
 | `GET /v1/ranking` | cross-site clean-traffic ranking — **legacy `API_TOKEN` only**, see §5 | `period` (resolved in UTC) `limit` (default 100) |
 
