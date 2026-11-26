@@ -783,7 +783,7 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
   }
 
   // site-scoped queries — reuse the api worker's query layer
-  const m = path.match(/^\/api\/sites\/([A-Za-z0-9]{4,16})\/([a-z_]+)(?:\/([^/]+)\/([a-z_]+))?$/);
+  const m = path.match(/^\/api\/sites\/([A-Za-z0-9]{4,16})\/([a-z0-9_]+)(?:\/([^/]+)\/([a-z_]+))?$/);
   if (m && request.method === 'GET') {
     const [, siteId, resource, subId, subResource] = m;
     const site = await env.DB.prepare('SELECT owner_id, timezone FROM sites WHERE site_id = ?').bind(siteId).first<{ owner_id: string; timezone: string }>();
