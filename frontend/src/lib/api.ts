@@ -12,7 +12,6 @@ import type {
   FilterItem,
   FunnelQueryResponse,
   FunnelStep,
-  Ga4Report,
   HomeSettings,
   MeResponse,
   OverviewResponse,
@@ -172,8 +171,6 @@ export const api = {
 
   // Per-site analytics
   realtime: (siteId: string) => apiFetch<RealtimeResponse>(`/api/sites/${siteId}/realtime?summary=1`),
-  ga4: (siteId: string, period: string, dimensions: string[], filter?: FilterItem) =>
-    apiFetch<Ga4Report>(`/api/sites/${siteId}/ga4${qs({ period, dimensions: dimensions.join(','), filter_dim: filter?.dim, filter_value: filter?.value })}`),
   onlineDashboard: (siteId: string, filters: FilterItem[]) =>
     apiFetch<OnlineDashboardResponse>(`/api/sites/${siteId}/online_dashboard${qs({ filters: serializeFilters(filters) })}`),
   overview: (siteId: string, period: string, filters: FilterItem[] = []) =>
