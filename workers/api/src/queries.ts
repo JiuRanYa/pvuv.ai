@@ -477,8 +477,26 @@ function addSummary(out: Map<string, SiteSummary>, r: SiteSummary): void {
 // GET /sites/:id/overview  — real-time totals over the whole span
 // ---------------------------------------------------------------------------
 
-// Return null on normal trackers so their existing rollup path stays available.
-async function correctedDurations(db: D1Database, siteId: string, period: Period, filters: Filter[], interval = 'total') {
+interface VisitBucket {
+  extraVisits: number;
+  starts: number;
+  bounces: number;
+  singles: number;
+  ms: number;
+  timed: number;
+}
+
+function emptyVisitBucket(): VisitBucket {
+  return { extraVisits: 0, starts: 0, bounces: 0, singles: 0, ms: 0, timed: 0 };
+}
+
+function visitRate(count: number, starts: number) {
+  return starts ? Math.round(count * 1e4 / starts) / 1e4 : null;
+}
+
+// Native trackers retain their recorded engagement signals. The PoE legacy
+// tracker emitted only pageviews, so both bounce definitions reduce to one PV.
+async function correctedSessions(db: D1Database, siteId: string, period: Period, filters: Filter[], interval = 'total') {
   const bounds = [siteId, period.startTs, period.endTs];
   const candidateWhere = `site_id=? AND last_pageview_at>=? AND started_at<? AND ${longTab}`;
   const affected = await db.prepare(`SELECT 1 FROM sessions WHERE ${candidateWhere} LIMIT 1`).bind(...bounds).first();
@@ -486,53 +504,92 @@ async function correctedDurations(db: D1Database, siteId: string, period: Period
   const tables = await eventTables(db, 0, Date.now()+1);
   if (!tables.length) return null;
   const sf = seFilter(filters);
-  const extra = sf.sql ? ' AND '+sf.sql : '';
+  const ef = evFilter(filters);
+  const pageOnly = 'events_count=pageviews AND duration_ms=0';
   const intraday = interval === 'minute' || interval === 'hour';
   const step = interval === 'minute' ? 60_000 : intraday ? 3_600_000 : 900_000;
-  const bucket = interval === 'total' ? '0' : `CAST((first_ts-?)/${step} AS INTEGER)`;
+  const slot = (col: string) => interval === 'total' ? '0' : `CAST((${col}-${Math.trunc(period.startTs)})/${step} AS INTEGER)`;
+
+  // Split before filtering. Facets can hide a pageview, but that pageview
+  // still keeps its original visit alive. Counts use the event facet, while
+  // bounce outcomes use the same session facet as the ordinary dashboard.
+  const hitTables = tables.filter(t => t >= 'events_'+monthSuffix(period.startTs) && t <= 'events_'+monthSuffix(period.endTs-1));
+  const hits = unionOver(hitTables, 'session_id,ts', siteId, period.startTs, period.endTs,
+    "event='pageview'" + (ef.sql ? ' AND '+ef.sql : ''), ef.binds);
+  const filteredHits = Boolean(ef.sql) && hitTables.length > 0;
+  const matched = filteredHits ? `AND EXISTS (SELECT 1 FROM matching h WHERE h.session_id=n.session_id AND h.ts=n.ts)` : '';
   const rows = await db.prepare(`
-    WITH candidates AS MATERIALIZED (SELECT site_id,session_id FROM sessions WHERE ${candidateWhere}${extra}),
+    WITH candidates AS MATERIALIZED (SELECT site_id,session_id,(${sf.sql || '1'}) AS included,
+      (${pageOnly}) AS page_only FROM sessions WHERE ${candidateWhere}),
     ${tabSpansSql(tables)},
-    durations AS (
-      SELECT first_ts,last_ts-first_ts AS duration FROM spans WHERE first_ts>=? AND first_ts<?
+    ${filteredHits ? 'matching AS MATERIALIZED ('+hits.sql+'),' : ''}
+    starts AS (
+      SELECT first_ts,last_ts-first_ts AS duration,
+        CASE WHEN page_only THEN sp.pageviews=1 END AS bounce,
+        CASE WHEN page_only THEN sp.pageviews=1 END AS single_page
+      FROM spans sp JOIN candidates USING(session_id) WHERE included AND first_ts>=? AND first_ts<?
       UNION ALL
-      SELECT started_at,last_pageview_at-started_at FROM sessions WHERE site_id=? AND started_at>=? AND started_at<?
-        AND last_pageview_at IS NOT NULL AND NOT (${longTab})${extra}
+      SELECT started_at,
+        CASE WHEN NOT (${longTab}) THEN last_pageview_at-started_at END,
+        CASE WHEN NOT (COALESCE(${longTab},0) AND ${pageOnly}) THEN COALESCE(is_bounce,0) END,
+        CASE WHEN NOT (COALESCE(${longTab},0) AND ${pageOnly}) THEN pageviews<=1 END
+      FROM sessions WHERE site_id=? AND started_at>=? AND started_at<? ${sf.sql ? 'AND '+sf.sql : ''}
+    ), run_hits AS (
+      SELECT n.session_id,n.visit,MIN(ts) AS first_hit,MAX(ts) AS last_hit FROM numbered n JOIN candidates USING(session_id)
+      WHERE page_only AND ts>=? AND ts<? ${matched} GROUP BY n.session_id,n.visit
+    ), pairs AS (
+      SELECT first_hit,LAG(last_hit) OVER(PARTITION BY session_id ORDER BY visit) AS prev_hit FROM run_hits
     )
-    SELECT ${bucket} AS slot,SUM(duration) AS ms,COUNT(*) AS n FROM durations GROUP BY slot
-  `).bind(...bounds,...sf.binds,period.startTs,period.endTs,...bounds,...sf.binds,...(interval === 'total' ? [] : [period.startTs]))
-    .all<{slot:number;ms:number;n:number}>();
-  const values = new Map<number,{ms:number;n:number}>();
+    SELECT ${slot('first_ts')} AS slot,NULL AS prev,0 AS extras,COUNT(bounce) AS starts,
+      COALESCE(SUM(bounce),0) AS bounces,COALESCE(SUM(single_page),0) AS singles,
+      COALESCE(SUM(duration),0) AS ms,COUNT(duration) AS timed FROM starts GROUP BY slot
+    UNION ALL
+    SELECT ${slot('first_hit')} AS slot,${slot('prev_hit')} AS prev,COUNT(*) AS extras,0,0,0,0,0
+      FROM pairs WHERE prev_hit IS NOT NULL GROUP BY slot,prev
+  `).bind(...sf.binds,...bounds,...(filteredHits ? hits.binds : []),period.startTs,period.endTs,
+    ...bounds,...sf.binds,period.startTs,period.endTs)
+    .all<{slot:number;prev:number|null;extras:number;starts:number;bounces:number;singles:number;ms:number;timed:number}>();
+
   const dayIndex = new Map<string, number>();
   if (!intraday && interval !== 'total') {
     for (const day of enumerateDays(period.start,period.end)) {
       const key = bucketKey(day,interval)[0];
-      if (!dayIndex.has(key)) dayIndex.set(key, dayIndex.size);
+      if (!dayIndex.has(key)) dayIndex.set(key,dayIndex.size);
     }
   }
+  const indexFor = (slot: number) => {
+    if (!dayIndex.size) return slot;
+    const day = localYMD(period.startTs+slot*step,period.tz);
+    return dayIndex.get(bucketKey(dayStr(day.y,day.m0,day.d),interval)[0])!;
+  };
+  const values = new Map<number,VisitBucket>();
   for (const row of rows.results) {
-    let index = row.slot;
-    if (dayIndex.size) {
-      const day = localYMD(period.startTs + row.slot * step,period.tz);
-      index = dayIndex.get(bucketKey(dayStr(day.y,day.m0,day.d),interval)[0])!;
-    }
-    const agg = values.get(index) ?? {ms:0,n:0};
+    const index = indexFor(row.slot);
+    const agg = values.get(index) ?? emptyVisitBucket();
+    // Each subsequent run adds one visit only when a previous run of the
+    // same tab already contributed to this particular reporting bucket.
+    if (row.prev !== null && indexFor(row.prev) === index) agg.extraVisits += row.extras;
+    agg.starts += row.starts;
+    agg.bounces += row.bounces;
+    agg.singles += row.singles;
     agg.ms += row.ms;
-    agg.n += row.n;
+    agg.timed += row.timed;
     values.set(index,agg);
   }
-  return new Map([...values].map(([slot,v]) => [slot,Math.round(v.ms/v.n)]));
+  return values;
 }
 
 export async function overview(db: D1Database, siteId: string, period: Period, filters: Filter[] = []) {
   const ev = await eventsSiteAgg(db, siteId, period.startTs, period.endTs, filters);
   const s = await sessionAgg(db, siteId, period.startTs, period.endTs, filters);
-  const durations = await correctedDurations(db, siteId, period, filters);
+  const corrected = await correctedSessions(db, siteId, period, filters);
+  const visits = corrected ? corrected.get(0) ?? emptyVisitBucket() : null;
   return {
     period: { start: period.start, end: period.end },
-    pv: ev.pv, uv: ev.uv, sessions: ev.sessions,
-    bounce_rate: s.bounce_rate, bounce_rate_single: s.bounce_rate_single,
-    avg_duration_ms: s.avg_duration_ms, visit_duration_ms: durations ? durations.get(0) ?? null : s.visit_duration_ms,
+    pv: ev.pv, uv: ev.uv, sessions: ev.sessions + (visits?.extraVisits ?? 0),
+    bounce_rate: visits ? visitRate(visits.bounces, visits.starts) : s.bounce_rate,
+    bounce_rate_single: visits ? visitRate(visits.singles, visits.starts) : s.bounce_rate_single,
+    avg_duration_ms: s.avg_duration_ms, visit_duration_ms: visits ? (visits.timed ? Math.round(visits.ms/visits.timed) : null) : s.visit_duration_ms,
     clean_count: ev.clean_count, suspect_count: ev.suspect_count,
     bot_count: ev.bot_count, crawler_count: ev.crawler_count,
     conversions: ev.conversions, revenue: ev.revenue,
@@ -713,9 +770,14 @@ export async function timeseries(db: D1Database, siteId: string, metric: string,
   const points = interval === 'minute' || interval === 'hour'
     ? await subDaySeries(db, siteId, period, interval, metric, filters)
     : await calendarSeries(db, siteId, period, interval, metric, filters);
-  if (metric === 'visit_duration_ms') {
-    const durations = await correctedDurations(db, siteId, period, filters, interval);
-    if (durations) points.forEach((point, i) => { point.value = durations.get(i) ?? null; });
+  if (['sessions','bounce_rate','bounce_rate_single','visit_duration_ms'].includes(metric)) {
+    const corrected = await correctedSessions(db, siteId, period, filters, interval);
+    if (corrected) points.forEach((point,i) => {
+      const visits = corrected.get(i) ?? emptyVisitBucket();
+      if (metric === 'sessions') point.value = (point.value ?? 0) + visits.extraVisits;
+      else if (metric === 'visit_duration_ms') point.value = visits.timed ? Math.round(visits.ms/visits.timed) : null;
+      else point.value = visitRate(metric === 'bounce_rate' ? visits.bounces : visits.singles, visits.starts);
+    });
   }
   return { metric, interval, points };
 }
