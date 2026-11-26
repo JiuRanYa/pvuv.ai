@@ -25,7 +25,8 @@ import { parseBotDirectory } from '../../../shared/botdir';
 import { createToken } from '../../../shared/tokens';
 import { verifySession, SESSION_COOKIE } from '../../api/src/auth';
 import { generateSiteId, hmacSign, serializeCookie } from '../../../shared/ids';
-import { ga4Config, ga4Report } from './ga4';
+import { ga4Config, ga4Property, ga4Report, runGa4Report } from './ga4';
+import { ga4Connection, ga4Consent, ga4ConsentRedirect, ga4ConsentToken, isGa4Callback, saveGa4Connection } from './ga4-consent';
 import { runDiagnostics, probeEvent } from './diagnostics';
 import {
   isProvider, configuredProviders, oauthStart, oauthCallback,
@@ -63,6 +64,7 @@ export interface Env {
   DEFAULT_LANG?: string;
   /** Cloudflare secret for the read-only GA4 property. */
   GA4_REPORTING?: string;
+  GA4_TARGET?: string;
 }
 
 const SESSION_TTL_MS = 7 * 86400e3;
@@ -260,6 +262,21 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
     const [, provider, action] = authMatch;
     if (!isProvider(provider)) return json({ error: 'unknown provider' }, 404);
     if (action === 'start') return oauthStart(env, provider, url.origin, Date.now());
+    if (provider === 'google' && isGa4Callback(url)) {
+      const property = ga4Property(env.GA4_TARGET);
+      if (!property) throw new ApiError(404, 'GA4 has no configured property');
+      try {
+        const actor = await verifySession(env.HMAC_KEY, request.headers.get('cookie'));
+        const site = await env.DB.prepare('SELECT owner_id FROM sites WHERE site_id=?').bind(property.site_id).first<{owner_id: string}>();
+        if (!actor || site?.owner_id !== actor) throw new ApiError(403, 'Dashboard access required');
+        const tokens = await ga4ConsentToken(env, request, url, actor, email => isAdminEmail(env, email));
+        await runGa4Report(property, new URLSearchParams({ period: 'yesterday' }), tokens.access_token);
+        await saveGa4Connection(env, property, tokens.refresh_token);
+        return ga4ConsentRedirect(property);
+      } catch (err) {
+        return ga4ConsentRedirect(property, err instanceof ApiError && err.status === 502 ? 'property' : 'consent');
+      }
+    }
     return oauthCallbackHandler(request, env, url, provider);
   }
 
@@ -303,13 +320,16 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
   if (!user) throw new ApiError(401, 'auth required');
 
   if (request.method === 'GET' && path === '/api/me') {
+    const property = ga4Property(env.GA4_TARGET);
     return json({
       user,
       timezone: await userTimezone(env, user),
       // the console can't reliably derive this from its own hostname, so it is
       // deployment config (wrangler.toml [vars] INGEST_HOST)
       ingest_host: env.INGEST_HOST || '',
-      ga4_site: ga4Config(env.GA4_REPORTING)?.site_id ?? null,
+      ga4_site: ga4Config(env.GA4_REPORTING)?.site_id
+        ?? (property && await ga4Connection(env, property, true) ? property.site_id : null),
+      ga4_target: property?.site_id ?? null,
     });
   }
 
@@ -769,10 +789,26 @@ async function api(request: Request, env: Env, url: URL): Promise<Response> {
     const site = await env.DB.prepare('SELECT owner_id, timezone FROM sites WHERE site_id = ?').bind(siteId).first<{ owner_id: string; timezone: string }>();
     if (!site || site.owner_id !== user) throw new ApiError(403, 'not your site');
 
+    if (resource === 'ga4_connect') {
+      const property = ga4Property(env.GA4_TARGET);
+      if (property?.site_id !== siteId) throw new ApiError(404, 'GA4 has no configured property for this site');
+      return ga4Consent(env, url, user);
+    }
+
     if (resource === 'ga4') {
       const config = ga4Config(env.GA4_REPORTING);
-      if (!config || config.site_id !== siteId) throw new ApiError(404, 'GA4 reporting is not connected for this site');
-      const response = json(await ga4Report(config, url.searchParams));
+      const property = ga4Property(env.GA4_TARGET);
+      let report;
+      if (config?.site_id === siteId) {
+        report = await ga4Report(config, url.searchParams);
+      } else if (property?.site_id === siteId) {
+        const token = await ga4Connection(env, property);
+        if (!token) throw new ApiError(428, 'GA4 has not been authorized for this property');
+        report = await runGa4Report(property, url.searchParams, token);
+      } else {
+        throw new ApiError(404, 'GA4 reporting is not configured for this site');
+      }
+      const response = json(report);
       response.headers.set('cache-control', 'private, no-store');
       return response;
     }

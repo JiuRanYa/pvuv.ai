@@ -17,6 +17,7 @@ export interface MeResponse {
   timezone: string;
   ingest_host: string;
   ga4_site?: string | null;
+  ga4_target?: string | null;
 }
 
 export interface HomeSettings {

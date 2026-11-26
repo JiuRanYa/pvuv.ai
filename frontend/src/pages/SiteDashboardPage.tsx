@@ -548,8 +548,8 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
 
       {/* Main Container (Plausible exact max-w-[1120px] px-4) */}
       <main className="max-w-[1120px] mx-auto px-4 pt-2 pb-16">
-        {me?.ga4_site === siteId && <Link to={`/sites/${siteId}?source=ga4`} className="inline-flex mb-3 text-sm font-medium text-indigo-700 hover:underline">
-          {lang === 'zh' ? '查看 GA4 官方报表' : 'View GA4 reports'}
+        {(me?.ga4_site === siteId || me?.ga4_target === siteId) && <Link to={`/sites/${siteId}?source=ga4`} className="inline-flex mb-3 text-sm font-medium text-indigo-700 hover:underline">
+          {me.ga4_site === siteId ? (lang === 'zh' ? '查看 GA4 官方报表' : 'View GA4 reports') : (lang === 'zh' ? '连接 GA4 官方报表' : 'Connect GA4 reports')}
         </Link>}
         {/* Active Filter Chips */}
         {filters.length > 0 && (

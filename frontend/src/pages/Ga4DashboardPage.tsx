@@ -4,10 +4,10 @@ import { BreakdownCard, type BarTone } from '../components/BreakdownCard';
 import { Dropdown } from '../components/Dropdown';
 import { Navbar } from '../components/Navbar';
 import { StatsGraphCard, type MainMetricKey } from '../components/StatsGraphCard';
-import { api, HttpError } from '../lib/api';
+import { api, HttpError, withBase } from '../lib/api';
 import { PERIOD_OPTIONS } from '../lib/format';
 import { useI18n } from '../lib/i18n';
-import { Link } from '../lib/router';
+import { Link, useRouter } from '../lib/router';
 import type { FilterItem, Ga4Metrics, Ga4Report } from '../lib/types';
 
 const cards: Array<{ tone: BarTone; tabs: Array<[string, string, string]> }> = [
@@ -27,6 +27,9 @@ const chartMetrics: Array<keyof Ga4Metrics> = ['uv', 'sessions', 'pv', 'pv_per_s
 export function Ga4DashboardPage({ siteId }: { siteId: string }) {
   const { lang, t } = useI18n();
   const zh = lang === 'zh';
+  const { search } = useRouter();
+  const consentError = new URLSearchParams(search).get('ga4_error');
+  const [connect, setConnect] = useState(false);
   const [period, setPeriod] = useState<string>('today');
   const [dimensions, setDimensions] = useState(() => cards.map(card => card.tabs[0][0]));
   const [metric, setMetric] = useState<keyof Ga4Metrics>('uv');
@@ -38,11 +41,13 @@ export function Ga4DashboardPage({ siteId }: { siteId: string }) {
     let active = true;
     setReport(undefined);
     setError(undefined);
+    setConnect(false);
     api.ga4(siteId, period, dimensions, filter).then(data => {
       if (active) setReport(data);
     }).catch((err: unknown) => {
       if (!active) return;
-      const failed = err instanceof HttpError && err.status === 404;
+      const failed = err instanceof HttpError && (err.status === 404 || err.status === 428);
+      setConnect(err instanceof HttpError && err.status === 428);
       setError(failed
         ? (zh ? '此站点尚未连接 GA4 报表。' : 'GA4 reporting is not connected for this site.')
         : (zh ? 'GA4 报表加载失败。' : 'Unable to load the GA4 report.'));
@@ -77,7 +82,10 @@ export function Ga4DashboardPage({ siteId }: { siteId: string }) {
         </button>}
         {error ? <div role="alert" className="plausible-card p-5">
           <p>{error}</p>
+          {consentError === 'property' && <p className="mt-2 text-sm">{zh ? 'Google 账号没有通过媒体资源报表验证。请使用拥有 PoE 媒体资源访问权限的账号。' : 'Google did not return reports for the PoE property. Use an account with access to that property.'}</p>}
+          {consentError === 'consent' && <p className="mt-2 text-sm">{zh ? 'Google 未返回可用的只读授权。' : 'Google did not return usable read-only authorization.'}</p>}
           <div className="mt-3 flex flex-wrap gap-4 text-sm text-indigo-700">
+            {connect && <a href={withBase(`/api/sites/${siteId}/ga4_connect`)} className="font-semibold hover:underline">{zh ? '使用 Google 授权只读报表' : 'Authorize read-only reports with Google'}</a>}
             <button type="button" onClick={() => setRevision(n => n + 1)}>{zh ? '重试' : 'Retry'}</button>
             <a href="https://analytics.google.com/analytics/web/" className="inline-flex items-center gap-1"><ExternalLink size={14}/>{zh ? '打开 Google Analytics' : 'Open Google Analytics'}</a>
           </div>

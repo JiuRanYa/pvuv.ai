@@ -3,28 +3,38 @@ import { ApiError, parsePeriod } from '../../api/src/queries';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API = 'https://analyticsdata.googleapis.com/v1beta';
-const SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
+export const GA4_SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
 
-interface Config {
+export interface Ga4Property {
   site_id: string;
   property_id: string;
   time_zone: string;
   stream_id?: string;
+}
+
+interface Config extends Ga4Property {
   client_email: string;
   private_key: string;
 }
 
-export function ga4Config(raw?: string): Config | null {
+export function ga4Property(raw?: string): Ga4Property | null {
   if (!raw) return null;
   try {
-    const c = JSON.parse(raw) as Config;
-    return /^[A-Za-z0-9]{4,16}$/.test(c.site_id) && /^\d+$/.test(c.property_id)
-      && (!c.stream_id || /^\d+$/.test(c.stream_id)) && typeof c.time_zone === 'string' && isValidTimezone(c.time_zone)
-      && typeof c.client_email === 'string' && c.private_key?.startsWith('-----BEGIN PRIVATE KEY-----')
-      ? c : null;
+    const c = JSON.parse(raw) as Ga4Property;
+    return typeof c.site_id === 'string' && /^[A-Za-z0-9]{4,16}$/.test(c.site_id)
+      && typeof c.property_id === 'string' && /^\d+$/.test(c.property_id)
+      && (!c.stream_id || /^\d+$/.test(c.stream_id))
+      && typeof c.time_zone === 'string' && isValidTimezone(c.time_zone) ? c : null;
   } catch {
     return null;
   }
+}
+
+export function ga4Config(raw?: string): Config | null {
+  const property = ga4Property(raw);
+  if (!property) return null;
+  const c = property as Config;
+  return typeof c.client_email === 'string' && c.private_key?.startsWith('-----BEGIN PRIVATE KEY-----') ? c : null;
 }
 
 function b64url(bytes: Uint8Array): string {
@@ -46,7 +56,7 @@ async function getAccessToken(config: Config, fetcher: typeof fetch): Promise<st
   const encode = (value: object) => b64url(encoder.encode(JSON.stringify(value)));
   const iat = Math.floor(Date.now() / 1000);
   const assertion = encode({ alg: 'RS256', typ: 'JWT' }) + '.' + encode({
-    iss: config.client_email, scope: SCOPE, aud: TOKEN_URL, iat, exp: iat + 600,
+    iss: config.client_email, scope: GA4_SCOPE, aud: TOKEN_URL, iat, exp: iat + 600,
   });
   const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, encoder.encode(assertion));
   const response = await fetcher(TOKEN_URL, {
@@ -90,6 +100,10 @@ function metrics(row?: ReportRow) {
 }
 
 export async function ga4Report(config: Config, params: URLSearchParams, fetcher: typeof fetch = fetch) {
+  return runGa4Report(config, params, await getAccessToken(config, fetcher), fetcher);
+}
+
+export async function runGa4Report(config: Ga4Property, params: URLSearchParams, token: string, fetcher: typeof fetch = fetch) {
   const requestedPeriod = params.get('period') ?? 'today';
   if (!/^(today|yesterday|7d|28d|30d|90d|this_week|last_week|this_month|last_month|this_year)$/.test(requestedPeriod)) {
     throw new ApiError(400, 'GA4 requires a supported calendar period');
@@ -115,7 +129,6 @@ export async function ga4Report(config: Config, params: URLSearchParams, fetcher
       orderBys: [{ metric: { metricName }, desc: true }],
     };
   });
-  const token = await getAccessToken(config, fetcher);
   const property = `properties/${config.property_id}`;
   const batch = async (requests: object[]): Promise<Report[]> => {
     const response = await fetcher(`${API}/${property}:batchRunReports`, {
