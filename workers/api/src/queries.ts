@@ -16,6 +16,7 @@
 import { FLAG, ALL_FLAGS, FAKE_SEARCH_MASK, searchRefDomainSql, type FlagName } from '../../../shared/flags';
 import { localYMD, localMidnightUtc, localDaySpan, addDays, weekdayMon0, dayStr, tzOffsetMs } from '../../../shared/tz';
 import { monthSuffix, RESERVED_EVENTS_SQL } from '../../../shared/events';
+import { longTab, tabSpansSql } from './visit-duration';
 import { CONFIG } from '../../../shared/config.gen';
 
 // ---------------------------------------------------------------------------
@@ -476,14 +477,62 @@ function addSummary(out: Map<string, SiteSummary>, r: SiteSummary): void {
 // GET /sites/:id/overview  — real-time totals over the whole span
 // ---------------------------------------------------------------------------
 
+// Return null on normal trackers so their existing rollup path stays available.
+async function correctedDurations(db: D1Database, siteId: string, period: Period, filters: Filter[], interval = 'total') {
+  const bounds = [siteId, period.startTs, period.endTs];
+  const candidateWhere = `site_id=? AND last_pageview_at>=? AND started_at<? AND ${longTab}`;
+  const affected = await db.prepare(`SELECT 1 FROM sessions WHERE ${candidateWhere} LIMIT 1`).bind(...bounds).first();
+  if (!affected) return null;
+  const tables = await eventTables(db, 0, Date.now()+1);
+  if (!tables.length) return null;
+  const sf = seFilter(filters);
+  const extra = sf.sql ? ' AND '+sf.sql : '';
+  const intraday = interval === 'minute' || interval === 'hour';
+  const step = interval === 'minute' ? 60_000 : intraday ? 3_600_000 : 900_000;
+  const bucket = interval === 'total' ? '0' : `CAST((first_ts-?)/${step} AS INTEGER)`;
+  const rows = await db.prepare(`
+    WITH candidates AS MATERIALIZED (SELECT site_id,session_id FROM sessions WHERE ${candidateWhere}${extra}),
+    ${tabSpansSql(tables)},
+    durations AS (
+      SELECT first_ts,last_ts-first_ts AS duration FROM spans WHERE first_ts>=? AND first_ts<?
+      UNION ALL
+      SELECT started_at,last_pageview_at-started_at FROM sessions WHERE site_id=? AND started_at>=? AND started_at<?
+        AND last_pageview_at IS NOT NULL AND NOT (${longTab})${extra}
+    )
+    SELECT ${bucket} AS slot,SUM(duration) AS ms,COUNT(*) AS n FROM durations GROUP BY slot
+  `).bind(...bounds,...sf.binds,period.startTs,period.endTs,...bounds,...sf.binds,...(interval === 'total' ? [] : [period.startTs]))
+    .all<{slot:number;ms:number;n:number}>();
+  const values = new Map<number,{ms:number;n:number}>();
+  const dayIndex = new Map<string, number>();
+  if (!intraday && interval !== 'total') {
+    for (const day of enumerateDays(period.start,period.end)) {
+      const key = bucketKey(day,interval)[0];
+      if (!dayIndex.has(key)) dayIndex.set(key, dayIndex.size);
+    }
+  }
+  for (const row of rows.results) {
+    let index = row.slot;
+    if (dayIndex.size) {
+      const day = localYMD(period.startTs + row.slot * step,period.tz);
+      index = dayIndex.get(bucketKey(dayStr(day.y,day.m0,day.d),interval)[0])!;
+    }
+    const agg = values.get(index) ?? {ms:0,n:0};
+    agg.ms += row.ms;
+    agg.n += row.n;
+    values.set(index,agg);
+  }
+  return new Map([...values].map(([slot,v]) => [slot,Math.round(v.ms/v.n)]));
+}
+
 export async function overview(db: D1Database, siteId: string, period: Period, filters: Filter[] = []) {
   const ev = await eventsSiteAgg(db, siteId, period.startTs, period.endTs, filters);
   const s = await sessionAgg(db, siteId, period.startTs, period.endTs, filters);
+  const durations = await correctedDurations(db, siteId, period, filters);
   return {
     period: { start: period.start, end: period.end },
     pv: ev.pv, uv: ev.uv, sessions: ev.sessions,
     bounce_rate: s.bounce_rate, bounce_rate_single: s.bounce_rate_single,
-    avg_duration_ms: s.avg_duration_ms, visit_duration_ms: s.visit_duration_ms,
+    avg_duration_ms: s.avg_duration_ms, visit_duration_ms: durations ? durations.get(0) ?? null : s.visit_duration_ms,
     clean_count: ev.clean_count, suspect_count: ev.suspect_count,
     bot_count: ev.bot_count, crawler_count: ev.crawler_count,
     conversions: ev.conversions, revenue: ev.revenue,
@@ -664,6 +713,10 @@ export async function timeseries(db: D1Database, siteId: string, metric: string,
   const points = interval === 'minute' || interval === 'hour'
     ? await subDaySeries(db, siteId, period, interval, metric, filters)
     : await calendarSeries(db, siteId, period, interval, metric, filters);
+  if (metric === 'visit_duration_ms') {
+    const durations = await correctedDurations(db, siteId, period, filters, interval);
+    if (durations) points.forEach((point, i) => { point.value = durations.get(i) ?? null; });
+  }
   return { metric, interval, points };
 }
 
