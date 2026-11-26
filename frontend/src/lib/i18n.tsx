@@ -90,6 +90,8 @@ const MESSAGES: Record<Lang, Record<string, string>> = {
 
     // Column Headers
     'col.source': 'Source',
+    'col.referrer': 'Referring URL',
+    'source.no_referrer': 'No referring URL',
     'col.channel': 'Channel',
     'col.campaign': 'Campaign',
     'col.page': 'Page',
@@ -276,6 +278,8 @@ const MESSAGES: Record<Lang, Record<string, string>> = {
 
     // Column Headers
     'col.source': '来源',
+    'col.referrer': '引荐网址',
+    'source.no_referrer': '无引荐网址',
     'col.channel': '渠道',
     'col.campaign': '活动',
     'col.page': '页面',

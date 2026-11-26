@@ -849,8 +849,9 @@ export async function breakdown(db: D1Database, siteId: string, dim: string, per
       FROM sessions
       WHERE site_id = ? AND started_at >= ? AND started_at < ?
         AND ${direct ? 'source IS NULL' : 'source = ?'}
-      GROUP BY 1 ORDER BY sessions DESC LIMIT ?
-    `).bind(...(direct ? [siteId, period.startTs, period.endTs, limit] : [siteId, period.startTs, period.endTs, key, limit])).all();
+        ${sf.sql ? `AND ${sf.sql}` : ''}
+      GROUP BY 1 ORDER BY uv DESC, sessions DESC, key LIMIT ?
+    `).bind(siteId, period.startTs, period.endTs, ...(direct ? [] : [key]), ...sf.binds, limit).all();
     return { dim, key, rows: rows.results };
   }
 

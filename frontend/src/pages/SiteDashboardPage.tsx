@@ -64,6 +64,10 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
 
   // Breakdown card active tabs & datasets
   const [sourceTab, setSourceTab] = useState<string>('source');
+  const selectedSource = filters.find(f => f.dim === 'source')?.value;
+  const referrerSource = sourceTab === 'source' ? selectedSource : undefined;
+  const sourceDimension = referrerSource ? 'referrer' : sourceTab;
+  const sourceDetailKey = JSON.stringify([sourceDimension, referrerSource, period, filters]);
   const [sourceRows, setSourceRows] = useState<BreakdownRow[]>([]);
   const [sourceLoading, setSourceLoading] = useState(false);
 
@@ -177,7 +181,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
     setSourceLoading(true);
     setSourceRows([]);
     api
-      .breakdown(siteId, sourceTab, period, 15, filters)
+      .breakdown(siteId, sourceDimension, period, 15, filters, referrerSource)
       .then((res) => {
         if (alive) setSourceRows(res.rows ?? []);
       })
@@ -190,7 +194,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
     return () => {
       alive = false;
     };
-  }, [siteId, sourceTab, period, filtersKey]);
+  }, [siteId, sourceDimension, referrerSource, period, filtersKey]);
 
   // Fetch Pages Card
   useEffect(() => {
@@ -254,10 +258,10 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
     };
   }, [siteId, deviceTab, period, filtersKey]);
 
-  const loadDetails = async (cardKey: string, dim: string) => {
+  const loadDetails = async (cardKey: string, dim: string, key?: string) => {
     setDetailLoading((p) => ({ ...p, [cardKey]: true }));
     try {
-      const res = await api.breakdown(siteId, dim, period, 100, filters);
+      const res = await api.breakdown(siteId, dim, period, 100, filters, key);
       setDetailRows((p) => ({ ...p, [cardKey]: res.rows ?? [] }));
     } finally {
       setDetailLoading((p) => ({ ...p, [cardKey]: false }));
@@ -578,7 +582,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
             {/* 2. Breakdown Row 1: Sources (Blue) & Top Pages (Orange) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
               <BreakdownCard
-                key={sourceTab}
+                key={sourceDetailKey}
                 tabs={[
                   { id: 'channel', label: t('card.channels') },
                   { id: 'source', label: t('card.sources') },
@@ -594,21 +598,26 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                   },
                 ]}
                 activeTab={sourceTab}
-                onTabChange={setSourceTab}
+                onTabChange={tab => {
+                  if (selectedSource && (tab === 'source' || tab === 'channel')) removeFilter('source', selectedSource);
+                  setSourceTab(tab);
+                }}
                 tone="blue"
                 leftColLabel={
                   sourceTab === 'channel'
                     ? t('col.channel')
                     : sourceTab.startsWith('utm_')
                       ? t('col.campaign')
-                      : t('col.source')
+                      : referrerSource ? `${t('col.referrer')} · ${displaySourceLabel(referrerSource, lang)}` : t('col.source')
                 }
                 rightColLabel={t('col.visitors')}
                 rows={sourceRows}
                 loading={sourceLoading}
                 getRowKey={(r) => r.key || '(direct)'}
                 getRowLabel={(r) =>
-                  sourceTab === 'channel'
+                  referrerSource
+                    ? (r.key && r.key !== '(none)' ? r.key : t('source.no_referrer'))
+                    : sourceTab === 'channel'
                     ? displayChannelLabel(r.key, lang)
                     : sourceTab === 'source'
                       ? displaySourceLabel(r.key, lang)
@@ -619,10 +628,10 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                   sourceTab === 'channel' ? (
                     <ChannelIcon channel={r.key || ''} />
                   ) : sourceTab === 'source' ? (
-                    <SourceIcon source={r.key || ''} />
+                      <SourceIcon source={referrerSource || r.key || ''} />
                   ) : null
                 }
-                onRowClick={(r) => {
+                onRowClick={referrerSource ? undefined : (r) => {
                   if (sourceTab === 'channel' && r.key) {
                     addFilter('channel', r.key);
                     setSourceTab('source');
@@ -630,9 +639,9 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                     addFilter(sourceTab, r.key || '(direct)');
                   }
                 }}
-                onOpenDetails={() => void loadDetails('source', sourceTab)}
-                detailRows={detailRows.source}
-                detailLoading={detailLoading.source}
+                onOpenDetails={() => void loadDetails(sourceDetailKey, sourceDimension, referrerSource)}
+                detailRows={detailRows[sourceDetailKey]}
+                detailLoading={detailLoading[sourceDetailKey]}
               />
 
               <BreakdownCard
