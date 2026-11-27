@@ -721,7 +721,7 @@ export function SiteDashboardPage({ siteId }: { siteId: string }) {
                 getRowValue={(r) => r.uv || r.sessions || r.pv || 0}
                 onRowClick={(r) => {
                   const p = r.path || r.key;
-                  if (p && p !== '(unknown)') addFilter(online ? pageTab : 'page', p);
+                  if (p && p !== '(unknown)') addFilter(pageTab, p);
                 }}
                 onOpenDetails={() => void loadDetails('page', pageTab)}
                 detailRows={online ? liveRows(pageTab) : detailRows.page}

@@ -335,7 +335,7 @@ export function BottomInsightsCard({
                 {goals.map((g) => {
                   const uniques = g.uv || 0;
                   const total = g.pv || 0;
-                  const cr = totalUv > 0 ? uniques / totalUv : 0;
+                  const cr = g.conversion_rate == null ? (totalUv > 0 ? uniques / totalUv : null) : g.conversion_rate / 100;
                   const pct = maxGoalUv > 0 ? Math.max((uniques / maxGoalUv) * 100, 1.5) : 0;
                   return (
                     <div

@@ -50,10 +50,10 @@ function snapshotText(
   lines.push(`Pageviews: ${ov.pv}`);
   lines.push(`Unique visitors: ${ov.uv}`);
   lines.push(`Sessions: ${ov.sessions}`);
-  lines.push(`Bounce rate (engaged, GA4): ${ov.bounce_rate != null ? (ov.bounce_rate * 100).toFixed(1) + '%' : 'n/a'}`);
+  lines.push(`Bounce rate (Plausible): ${ov.bounce_rate != null ? (ov.bounce_rate * 100).toFixed(1) + '%' : 'n/a'}`);
   lines.push(`Bounce rate (single-page): ${ov.bounce_rate_single != null ? (ov.bounce_rate_single * 100).toFixed(1) + '%' : 'n/a'}`);
   lines.push(`Avg engaged time: ${dur(ov.avg_duration_ms)}`);
-  lines.push(`Avg visit duration (first→last pageview): ${dur(ov.visit_duration_ms)}`);
+  lines.push(`Avg visit duration: ${dur(ov.visit_duration_ms)}`);
   if (ov.conversions) lines.push(`Conversions (goal events): ${ov.conversions}`);
   if (ov.revenue) lines.push(`Revenue (USD): ${ov.revenue.toFixed(2)}`);
   lines.push('');

@@ -65,6 +65,7 @@ export interface OverviewResponse {
   pv: number;
   uv: number;
   sessions: number;
+  views_per_visit: number | null;
   bounce_rate: number | null;
   bounce_rate_single: number | null;
   avg_duration_ms: number | null;
@@ -113,6 +114,7 @@ export interface BreakdownRow {
   bounces?: number;
   total_duration_ms?: number;
   revenue?: number;
+  conversion_rate?: number | null;
 }
 
 export interface BreakdownResponse {
@@ -315,7 +317,7 @@ export interface VisitorListRow {
   last_ts: number;
 }
 
-export type DashboardMetrics = Pick<OverviewResponse, 'uv' | 'pv' | 'sessions' | 'bounce_rate' | 'bounce_rate_single' | 'avg_duration_ms' | 'visit_duration_ms'> & { pv_per_visitor: number };
+export type DashboardMetrics = Pick<OverviewResponse, 'uv' | 'pv' | 'sessions' | 'views_per_visit' | 'bounce_rate' | 'bounce_rate_single' | 'avg_duration_ms' | 'visit_duration_ms'>;
 
 export interface OnlineDashboardResponse {
   window_minutes: number;

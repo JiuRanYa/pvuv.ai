@@ -5,7 +5,7 @@ import { fmtBucketLabel, fmtCompact, fmtDecimal, fmtDuration, fmtNumber, fmtPct 
 import { useI18n } from '../lib/i18n';
 import { Dropdown } from './Dropdown';
 
-export type MainMetricKey = 'uv' | 'sessions' | 'pv' | 'pv_per_visitor' | 'bounce_rate' | 'visit_duration_ms' | 'avg_duration_ms' | 'bounce_rate_single';
+export type MainMetricKey = 'uv' | 'sessions' | 'pv' | 'views_per_visit' | 'bounce_rate' | 'visit_duration_ms' | 'avg_duration_ms' | 'bounce_rate_single';
 
 function niceMax(val: number): number {
   if (!Number.isFinite(val) || val <= 0) return 5;
@@ -29,7 +29,7 @@ export function StatsGraphCard({
   allowedIntervals,
   loading,
 }: {
-  overview: Omit<DashboardMetrics, 'pv_per_visitor'> | null;
+  overview: DashboardMetrics | null;
   points: TimeseriesPoint[];
   activeMetric: MainMetricKey;
   onSelectMetric: (m: MainMetricKey) => void;
@@ -40,11 +40,6 @@ export function StatsGraphCard({
 }) {
   const { lang, t } = useI18n();
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-
-  const pagesPerVisitor = useMemo(() => {
-    if (!overview || !overview.uv) return 0;
-    return overview.pv / overview.uv;
-  }, [overview]);
 
   const kpis: Array<{
     key: MainMetricKey;
@@ -72,9 +67,9 @@ export function StatsGraphCard({
       title: overview ? fmtNumber(overview.pv) : undefined,
     },
     {
-      key: 'pv_per_visitor',
+      key: 'views_per_visit',
       label: t('kpi.views_per_visit'),
-      value: overview ? fmtDecimal(pagesPerVisitor, 2) : '—',
+      value: overview?.views_per_visit == null ? '—' : fmtDecimal(overview.views_per_visit, 2),
     },
     {
       key: 'bounce_rate',
@@ -112,7 +107,7 @@ export function StatsGraphCard({
 
   const isPct = activeMetric === 'bounce_rate' || activeMetric === 'bounce_rate_single';
   const isDur = activeMetric === 'visit_duration_ms' || activeMetric === 'avg_duration_ms';
-  const isDec = activeMetric === 'pv_per_visitor';
+  const isDec = activeMetric === 'views_per_visit';
 
   const formatY = (v: number): string => {
     if (v === 0) return '0';

@@ -1,7 +1,6 @@
-import { SESSION_IDLE_MS } from '../../../shared/ids';
-import { longTab, tabSpansSql } from './visit-duration';
 import { RESERVED_EVENTS_SQL } from '../../../shared/events';
 import { eventTables, REALTIME_WINDOW_MINUTES, type Filter } from './queries';
+import { reportInput } from './plausible-report';
 
 const STEP = 5 * 60_000;
 const dimensions = {
@@ -14,51 +13,63 @@ const dimensions = {
 };
 const dimensionNames = Object.keys(dimensions);
 export const onlineFilterDimensions = new Set(dimensionNames);
-const emptyStats = { uv: 0, pv: 0, sessions: 0, pv_per_visitor: 0, bounce_rate: null, bounce_rate_single: null,
+const emptyStats = { uv: 0, pv: 0, sessions: 0, pv_per_visitor: 0, views_per_visit: null, bounce_rate: null, bounce_rate_single: null,
   avg_duration_ms: null, visit_duration_ms: null };
 
 export async function onlineDashboard(db: D1Database, site: string, now: number, tz: string, filters: Filter[]) {
   const start = now - REALTIME_WINDOW_MINUTES * 60_000;
   const tables = await eventTables(db, start, now + 1);
+  const input = tables.length ? await reportInput(db,site,{start:'',end:'',startTs:start,endTs:now+1,now,tz},[]) : null;
   const groups = new Map(dimensionNames.map(name => [name, new Map<string, {key: string; uv: number; pv: number}>()]));
   const visitors: { visitor_id: string; source: string; path: string; last_ts: number }[] = [];
   const goals: { key: string; uv: number; pv: number; revenue: number }[] = [];
   type Stats = { [K in keyof typeof emptyStats]: number | null };
   let overview: Stats = emptyStats;
   const buckets = new Map<number, Stats>();
-  if (tables.length) {
-    const history = await eventTables(db, 0, now + 1);
-    const columns = 'id,visitor_id,session_id,ts,event,path,country,region,city,browser,os,device_type,utm_source,ref_domain,referrer,utm_campaign,utm_medium,utm_term,utm_content,revenue_usd';
+  if (input) {
+    const columns = 'id,visitor_id,session_id,ts,event,path,country,region,city,browser,os,device_type,utm_source,ref_domain,referrer,utm_campaign,utm_medium,utm_term,utm_content,revenue_usd,duration_ms';
     const raw = tables.map(t => `SELECT ${columns} FROM ${t} WHERE site_id=? AND ts>=? AND ts<=? AND verdict NOT IN ('bot','crawler')`).join(' UNION ALL ');
     const dims = Object.entries(dimensions).map(([name,expr]) => `COALESCE(NULLIF(${expr},''),'(unknown)') AS ${name}`).join(',');
     const valid = filters.filter(f => dimensionNames.includes(f.dim));
     const values = valid.map(f => f.values?.length ? f.values : [f.value]);
     const where = valid.map((f, i) => `${f.dim} IN (${values[i].map(() => '?').join(',')})`).join(' AND ');
     const result = await db.prepare(`
-      WITH ev AS MATERIALIZED (${raw}), ranked AS (
+      WITH ${input.sql}, ev AS MATERIALIZED (${raw}), ranked AS (
         SELECT *, ROW_NUMBER() OVER(PARTITION BY visitor_id ORDER BY ts DESC, session_id DESC, path DESC, id DESC) AS rn FROM ev
       ), latest AS (
         SELECT e.visitor_id, e.ts, ${dims} FROM ranked e LEFT JOIN sessions s ON s.site_id=? AND s.session_id=e.session_id WHERE rn=1
       ), people AS MATERIALIZED (SELECT * FROM latest ${where ? 'WHERE '+where : ''}),
       activity AS MATERIALIZED (
         SELECT ev.* FROM ev JOIN people USING(visitor_id)
-      ), candidates AS MATERIALIZED (
-        SELECT site_id,session_id FROM sessions WHERE site_id=? AND session_id IN (SELECT session_id FROM activity) AND ${longTab}
-      ), ${tabSpansSql(history)}, per_bucket AS (
-        SELECT (ts / ${STEP}) * ${STEP} AS bucket,visitor_id,session_id,SUM(event='pageview') AS pv FROM activity GROUP BY bucket,visitor_id,session_id
-      ), visits AS (
-        SELECT * FROM per_bucket UNION ALL
-        SELECT -1,visitor_id,session_id,SUM(pv) FROM per_bucket GROUP BY visitor_id,session_id
+      ), bucket_activity AS MATERIALIZED (
+        SELECT (ts / ${STEP}) * ${STEP} AS bucket,* FROM activity
+        UNION ALL SELECT -1,* FROM activity
+      ), per_bucket AS (
+        SELECT bucket,COUNT(DISTINCT visitor_id) AS uv,SUM(event='pageview') AS pv
+        FROM bucket_activity GROUP BY bucket
+      ), dwell AS (
+        SELECT bucket,AVG(ms) AS avg_duration_ms FROM (
+          SELECT bucket,session_id,SUM(duration_ms) AS ms FROM bucket_activity
+          WHERE event IN ('page_pulse','page_leave','engagement') AND duration_ms IS NOT NULL GROUP BY bucket,session_id
+        ) GROUP BY bucket
+      ), visit_stats AS (
+        SELECT b.bucket,COUNT(*) AS sessions,
+          ROUND(AVG(v.pv<2 AND v.interactive=0),2) AS bounce_rate, AVG(v.pv<=1) AS bounce_rate_single,
+          ROUND(AVG(v.last-v.first)/1000.0)*1000 AS visit_duration_ms
+        FROM per_bucket b JOIN visits v ON (b.bucket=-1 OR (v.first<b.bucket+${STEP} AND v.last>=b.bucket))
+        JOIN candidates c USING(session_id) JOIN people p ON p.visitor_id=c.visitor_id
+        WHERE v.last>=? GROUP BY b.bucket
       )
-      SELECT 'person' AS kind, json_object('visitor_id',visitor_id,'ts',ts,'pv',pv,${dimensionNames.map(k => `'${k}',${k}`).join(',')}) AS payload FROM people JOIN (SELECT visitor_id,SUM(pv) AS pv FROM per_bucket GROUP BY visitor_id) USING(visitor_id)
-      UNION ALL SELECT 'stats',json_object('bucket',bucket,'uv',COUNT(DISTINCT v.visitor_id),'pv',SUM(v.pv),'sessions',COUNT(*),
-        'pv_per_visitor',1.0*SUM(v.pv)/COUNT(DISTINCT v.visitor_id),'bounce_rate',AVG(s.is_bounce),'bounce_rate_single',AVG(s.pageviews<=1),
-        'avg_duration_ms',AVG(s.duration_ms),'visit_duration_ms',AVG(CASE WHEN s.visitor_id=s.session_id AND s.last_pageview_at-s.started_at>${SESSION_IDLE_MS} THEN sp.last_ts-sp.first_ts ELSE s.last_pageview_at-s.started_at END))
-        FROM visits v LEFT JOIN sessions s ON s.site_id=? AND s.session_id=v.session_id
-        LEFT JOIN spans sp ON sp.session_id=v.session_id AND sp.last_ts>=? AND sp.first_ts<=? GROUP BY bucket
+      SELECT 'person' AS kind, json_object('visitor_id',visitor_id,'ts',ts,'pv',pv,${dimensionNames.map(k => `'${k}',${k}`).join(',')}) AS payload
+        FROM people JOIN (SELECT visitor_id,SUM(event='pageview') AS pv FROM activity GROUP BY visitor_id) USING(visitor_id)
+      UNION ALL SELECT 'stats',json_object('bucket',bucket,'uv',b.uv,'pv',b.pv,'sessions',COALESCE(v.sessions,0),
+        'pv_per_visitor',1.0*b.pv/b.uv,'views_per_visit',ROUND(1.0*b.pv/v.sessions,2),
+        'bounce_rate',v.bounce_rate,'bounce_rate_single',v.bounce_rate_single,
+        'avg_duration_ms',d.avg_duration_ms,'visit_duration_ms',v.visit_duration_ms)
+        FROM per_bucket b LEFT JOIN visit_stats v USING(bucket) LEFT JOIN dwell d USING(bucket)
       UNION ALL SELECT 'goal',json_object('key',event,'uv',COUNT(DISTINCT visitor_id),'pv',COUNT(*),'revenue',COALESCE(SUM(revenue_usd),0))
         FROM activity WHERE event NOT IN (${RESERVED_EVENTS_SQL}) GROUP BY event
-    `).bind(...tables.flatMap(() => [site,start,now]),site,...values.flat(),site,site,start,now).all<{kind: string; payload: string}>();
+    `).bind(...input.args,...tables.flatMap(() => [site,start,now]),site,...values.flat(),start).all<{kind: string; payload: string}>();
     for (const row of result.results) {
       const data = JSON.parse(row.payload);
       if (row.kind === 'stats') {
